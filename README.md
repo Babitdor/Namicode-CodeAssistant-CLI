@@ -20,16 +20,6 @@ An open-source terminal-based AI coding assistant that runs in your terminal, si
 - Python 3.11 or higher
 - [uv](https://docs.astral.sh/uv/) (recommended) or pip
 
-### Install from PyPI (Recommended)
-
-```bash
-# Using pip
-pip install namicode-cli
-
-# Or using uv (recommended)
-uv pip install namicode-cli
-```
-
 ### Install from Source
 
 ```bash
