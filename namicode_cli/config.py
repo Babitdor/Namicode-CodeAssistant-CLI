@@ -1,4 +1,31 @@
-"""Configuration, constants, and model creation for the CLI."""
+"""Configuration, constants, and model creation for the CLI.
+
+This module provides centralized configuration management for the CLI, including:
+- Color scheme and UI styling constants
+- Environment variable parsing and settings management
+- Model creation for multiple LLM providers (OpenAI, Anthropic, Ollama, Google)
+- Project root detection and working directory management
+- Session state management
+- Rich console initialization with proper encoding
+
+Key Components:
+- create_model(): Factory function for creating chat models from configuration
+- settings(): Global settings object with environment variable access
+- COLORS: Color scheme constants for UI styling
+- DEEP_AGENTS_ASCII: ASCII art banner for CLI startup
+- SessionState: Dataclass for tracking session state
+
+Supported Model Providers:
+- OpenAI (default): Requires OPENAI_API_KEY
+- Anthropic: Requires ANTHROPIC_API_KEY
+- Ollama: Local models, requires OLLAMA_BASE_URL
+- Google: Requires GOOGLE_API_KEY
+
+Environment Configuration:
+- API keys loaded from environment variables or .env files
+- Configuration files in ~/.nami/ and .nami/
+- Project-specific settings override global settings
+"""
 
 import os
 import re
@@ -242,12 +269,85 @@ class Settings:
         return Path.home() / ".nami"
 
     def get_agents_root_dir(self) -> Path:
-        """Get the agents root directory.
+        """Get the global agents root directory.
 
         Returns:
             Path to ~/.nami/agents/
         """
         return self.user_deepagents_dir / "agents"
+
+    def get_project_agents_dir(self) -> Path | None:
+        """Get project-level agents directory path.
+
+        Returns:
+            Path to {project_root}/.nami/agents/, or None if not in a project
+        """
+        if not self.project_root:
+            return None
+        return self.project_root / ".nami" / "agents"
+
+    def ensure_project_agents_dir(self) -> Path | None:
+        """Ensure project-level agents directory exists and return its path.
+
+        Returns:
+            Path to {project_root}/.nami/agents/, or None if not in a project
+        """
+        if not self.project_root:
+            return None
+        agents_dir = self.get_project_agents_dir()
+        if agents_dir:
+            agents_dir.mkdir(parents=True, exist_ok=True)
+        return agents_dir
+
+    def get_all_agents(self) -> list[tuple[str, Path, str]]:
+        """Get all available agents from both global and project scopes.
+
+        Returns:
+            List of (agent_name, agent_dir_path, scope) tuples.
+            scope is either "global" or "project"
+        """
+        agents: list[tuple[str, Path, str]] = []
+
+        # Global agents (~/.nami/agents/)
+        global_agents_dir = self.get_agents_root_dir()
+        if global_agents_dir.exists():
+            for agent_dir in global_agents_dir.iterdir():
+                if agent_dir.is_dir() and (agent_dir / "agent.md").exists():
+                    agents.append((agent_dir.name, agent_dir, "global"))
+
+        # Project agents ({project_root}/.nami/agents/)
+        project_agents_dir = self.get_project_agents_dir()
+        if project_agents_dir and project_agents_dir.exists():
+            for agent_dir in project_agents_dir.iterdir():
+                if agent_dir.is_dir() and (agent_dir / "agent.md").exists():
+                    agents.append((agent_dir.name, agent_dir, "project"))
+
+        return agents
+
+    def find_agent(self, agent_name: str) -> tuple[Path, str] | None:
+        """Find an agent by name, checking project scope first then global.
+
+        Project-specific agents take precedence over global agents with the same name.
+
+        Args:
+            agent_name: Name of the agent to find
+
+        Returns:
+            Tuple of (agent_dir_path, scope) if found, None otherwise
+        """
+        # Check project agents first (higher priority)
+        project_agents_dir = self.get_project_agents_dir()
+        if project_agents_dir:
+            project_agent_dir = project_agents_dir / agent_name
+            if project_agent_dir.exists() and (project_agent_dir / "agent.md").exists():
+                return (project_agent_dir, "project")
+
+        # Check global agents
+        global_agent_dir = self.get_agents_root_dir() / agent_name
+        if global_agent_dir.exists() and (global_agent_dir / "agent.md").exists():
+            return (global_agent_dir, "global")
+
+        return None
 
     def get_global_skills_dir(self) -> Path:
         """Get the global skills directory (shared across all agents).

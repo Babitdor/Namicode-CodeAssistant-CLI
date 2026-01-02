@@ -202,6 +202,12 @@ The CLI implements a "Deep Agent" architecture with four key components:
 3. **File system access** via multiple backends (local, sandbox)
 4. **Detailed prompts** with memory and skills systems
 
+**Detailed Documentation:**
+- [Architecture Overview](docs/architecture-overview.md) - Complete system architecture
+- [API Reference](docs/api-reference.md) - Public API documentation
+- [Developer Guide](docs/developer-guide.md) - Development and contribution guide
+- [Architecture Decision Records](docs/adr/) - Design decisions and rationale
+
 ### Module Structure
 
 - `main.py` - Entry point and CLI loop

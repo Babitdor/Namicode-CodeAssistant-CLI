@@ -109,7 +109,11 @@ class AgentCompleter(Completer):
     """Provide completion for @agent mentions at the start of input."""
 
     def get_completions(self, document, _complete_event):
-        """Get agent completions when @ is at the start of input."""
+        """Get agent completions when @ is at the start of input.
+
+        Shows agents from both project scope (if in a project) and global scope.
+        Project agents are shown first and take precedence.
+        """
         text = document.text_before_cursor
 
         # Match @partial_agent_name at start of line (no space yet means still typing agent name)
@@ -119,35 +123,47 @@ class AgentCompleter(Completer):
 
         prefix = match.group(1)
         settings = Settings.from_environment()
-        agents_dir = settings.get_agents_root_dir()
 
-        if not agents_dir.exists():
-            return
+        # Get all agents from both scopes
+        all_agents = settings.get_all_agents()
 
-        for agent_dir in agents_dir.iterdir():
-            if agent_dir.is_dir() and (agent_dir / "agent.md").exists():
-                agent_name = agent_dir.name
-                if agent_name.lower().startswith(prefix.lower()):
-                    # Read description from agent.md
-                    description = "Custom agent"
-                    try:
-                        content = (agent_dir / "agent.md").read_text(encoding="utf-8")
-                        for line in content.split("\n"):
-                            line = line.strip()
-                            if line and not line.startswith("#"):
-                                description = line[:50]
-                                if len(line) > 50:
-                                    description += "..."
-                                break
-                    except Exception:
-                        pass
+        # Track which agent names we've yielded to avoid duplicates
+        # (project agents shadow global agents with same name)
+        yielded_names: set[str] = set()
 
-                    yield Completion(
-                        text=agent_name + " ",  # Add space after agent name
-                        start_position=-len(prefix),
-                        display=f"@{agent_name}",
-                        display_meta=description,
-                    )
+        for agent_name, agent_dir, scope in all_agents:
+            # Skip if name doesn't match prefix
+            if not agent_name.lower().startswith(prefix.lower()):
+                continue
+
+            # Skip if we already yielded a project agent with this name
+            if agent_name in yielded_names:
+                continue
+
+            yielded_names.add(agent_name)
+
+            # Read description from agent.md
+            scope_indicator = "[P] " if scope == "project" else ""
+            description = f"{scope_indicator}Custom agent"
+            try:
+                content = (agent_dir / "agent.md").read_text(encoding="utf-8")
+                for line in content.split("\n"):
+                    line = line.strip()
+                    if line and not line.startswith("#"):
+                        desc_text = line[:45] if scope == "project" else line[:50]
+                        if len(line) > 45:
+                            desc_text += "..."
+                        description = f"{scope_indicator}{desc_text}"
+                        break
+            except Exception:
+                pass
+
+            yield Completion(
+                text=agent_name + " ",  # Add space after agent name
+                start_position=-len(prefix),
+                display=f"@{agent_name}",
+                display_meta=description,
+            )
 
 
 def parse_file_mentions(text: str) -> tuple[str, list[Path]]:
@@ -184,7 +200,7 @@ def parse_agent_mentions(text: str, settings: Settings | None = None) -> tuple[s
         Tuple of (agent_name or None, remaining_query)
 
     Pattern: @agent_name <query>
-    Only matches if @agent_name exists in ~/.nami/agents/
+    Checks project agents first (if in a project), then global agents.
     """
     if settings is None:
         settings = Settings.from_environment()
@@ -196,9 +212,9 @@ def parse_agent_mentions(text: str, settings: Settings | None = None) -> tuple[s
     agent_name = match.group(1)
     query = match.group(2).strip()
 
-    # Verify agent exists
-    agent_dir = settings.get_agents_root_dir() / agent_name
-    if agent_dir.exists() and (agent_dir / "agent.md").exists():
+    # Verify agent exists (checks project scope first, then global)
+    agent_location = settings.find_agent(agent_name)
+    if agent_location is not None:
         return agent_name, query
 
     return None, text  # Agent doesn't exist, treat as regular input

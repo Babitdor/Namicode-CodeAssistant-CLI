@@ -1,4 +1,31 @@
-"""Helpers for tracking file operations and computing diffs for CLI display."""
+"""Helpers for tracking file operations and computing diffs for CLI display.
+
+This module provides utilities for tracking, previewing, and displaying
+file operations in the CLI:
+
+Key Components:
+- FileOpTracker: Tracks file operations across a session
+- ApprovalPreview: Previews changes for user approval
+- build_approval_preview(): Generate approval UI for file operations
+- render_file_operation(): Display file operations with rich formatting
+
+Features:
+- Track write_file, edit_file, and other file operations
+- Compute unified diffs for edit operations
+- Generate approval previews with context and error handling
+- Render file operations with color coding and formatting
+- Support for both local and sandbox backends
+
+The FileOpTracker maintains a list of operations performed during a session,
+allowing for review and approval of destructive operations. The approval
+preview shows:
+- File path and operation type
+- Diff preview for edits
+- Context (lines before/after)
+- Error messages if validation fails
+
+Used by execution.py for tool approval and UI rendering.
+"""
 
 from __future__ import annotations
 

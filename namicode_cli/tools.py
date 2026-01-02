@@ -1,4 +1,26 @@
-"""Custom tools for the CLI agent."""
+"""Custom tools for the CLI agent.
+
+This module provides additional tools beyond the filesystem and shell tools,
+enabling the agent to interact with external services and the web:
+
+Key Tools:
+- http_request(): Make HTTP requests to APIs and web services
+- fetch_url(): Fetch web pages and convert HTML to markdown
+- web_search(): Search the web using Tavily API
+
+These tools are registered with the agent and allow it to:
+- Fetch data from REST APIs
+- Scrape web content and convert to readable markdown
+- Search for current information online
+- Handle various HTTP methods (GET, POST, PUT, DELETE, etc.)
+
+Dependencies:
+- requests: HTTP client library
+- markdownify: HTML to markdown conversion
+- tavily: Web search API client
+
+The Tavily client is initialized if TAVILY_API_KEY is available in settings.
+"""
 
 import difflib
 import subprocess

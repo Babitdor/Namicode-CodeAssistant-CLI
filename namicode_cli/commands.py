@@ -1451,7 +1451,7 @@ async def _skills_list_interactive(ps, settings, assistant_id: str) -> bool:
 
 
 async def _agents_list(settings) -> bool:
-    """List all available custom agents.
+    """List all available custom agents from both global and project scopes.
 
     Args:
         settings: Settings instance
@@ -1463,48 +1463,73 @@ async def _agents_list(settings) -> bool:
     console.print("[bold]Available Agents:[/bold]", style=COLORS["primary"])
     console.print()
 
-    agents_dir = settings.get_agents_root_dir()
+    # Get all agents from both scopes using the new Settings method
+    all_agents = settings.get_all_agents()
 
-    if not agents_dir.exists():
+    if not all_agents:
         console.print("[yellow]No agents found.[/yellow]")
         console.print("[dim]Use '/agents' to create a new agent.[/dim]")
         console.print()
         return True
 
-    agents_found = []
-    for agent_dir in agents_dir.iterdir():
-        if agent_dir.is_dir():
-            agent_md = agent_dir / "agent.md"
-            if agent_md.exists():
-                # Read first non-empty line for description
-                try:
-                    content = agent_md.read_text(encoding="utf-8")
-                    lines = content.split("\n")
-                    description = ""
-                    for line in lines:
-                        line = line.strip()
-                        if line and not line.startswith("#"):
-                            description = line[:80]
-                            if len(line) > 80:
-                                description += "..."
-                            break
-                    agents_found.append((agent_dir.name, description))
-                except Exception:
-                    agents_found.append((agent_dir.name, "[unable to read]"))
+    # Separate by scope
+    global_agents = []
+    project_agents = []
 
-    if not agents_found:
-        console.print("[yellow]No agents found.[/yellow]")
-        console.print("[dim]Use '/agents' to create a new agent.[/dim]")
+    for agent_name, agent_dir, scope in all_agents:
+        agent_md = agent_dir / "agent.md"
+        # Read first non-empty line for description
+        try:
+            content = agent_md.read_text(encoding="utf-8")
+            lines = content.split("\n")
+            description = ""
+            for line in lines:
+                line = line.strip()
+                if line and not line.startswith("#"):
+                    description = line[:80]
+                    if len(line) > 80:
+                        description += "..."
+                    break
+        except Exception:
+            description = "[unable to read]"
+
+        if scope == "project":
+            project_agents.append((agent_name, description, agent_dir))
+        else:
+            global_agents.append((agent_name, description, agent_dir))
+
+    # Display project agents first (they take precedence)
+    if project_agents:
+        console.print("[bold green]Project Agents:[/bold green]")
+        console.print("[dim](Only available in this project)[/dim]")
         console.print()
-        return True
+        for name, description, _agent_dir in sorted(project_agents):
+            console.print(f"  @[bold]{name}[/bold]", style=COLORS["primary"])
+            if description:
+                console.print(f"    [dim]{description}[/dim]")
+        console.print()
 
-    for name, description in sorted(agents_found):
-        console.print(f"  @[bold]{name}[/bold]", style=COLORS["primary"])
-        if description:
-            console.print(f"    [dim]{description}[/dim]")
+    # Display global agents
+    if global_agents:
+        console.print("[bold cyan]Global Agents:[/bold cyan]")
+        console.print("[dim](Available in all projects)[/dim]")
+        console.print()
+        for name, description, _agent_dir in sorted(global_agents):
+            # Check if this global agent is shadowed by a project agent
+            is_shadowed = any(pa[0] == name for pa in project_agents)
+            if is_shadowed:
+                console.print(
+                    f"  @[bold]{name}[/bold] [dim](shadowed by project agent)[/dim]",
+                    style=COLORS["primary"],
+                )
+            else:
+                console.print(f"  @[bold]{name}[/bold]", style=COLORS["primary"])
+            if description:
+                console.print(f"    [dim]{description}[/dim]")
+        console.print()
 
-    console.print()
-    console.print(f"[dim]Total: {len(agents_found)} agent(s)[/dim]")
+    total = len(global_agents) + len(project_agents)
+    console.print(f"[dim]Total: {total} agent(s)[/dim]")
     console.print("[dim]Use @<agent_name> <query> to invoke an agent.[/dim]")
     console.print()
     return True
@@ -1549,14 +1574,65 @@ async def _agents_create_interactive(ps, settings) -> bool:
         console.print()
         return True
 
-    # Check if agent already exists
-    agent_dir = settings.get_agents_root_dir() / agent_name
+    # Ask for scope (global vs project)
+    in_project = settings.project_root is not None
+    use_project = False
+
+    if in_project:
+        console.print()
+        console.print("[bold]Where should this agent be stored?[/bold]")
+        console.print("  1. Global (available in all projects)")
+        console.print("  2. Project (only available in this project)")
+        console.print()
+        scope_choice = (
+            await ps.prompt_async("Scope (1-2, default=1): ")
+        ).strip() or "1"
+        use_project = scope_choice == "2"
+
+    # Determine target directory based on scope
+    if use_project:
+        agents_dir = settings.ensure_project_agents_dir()
+        if not agents_dir:
+            console.print("[red]Error: Not in a project directory.[/red]")
+            console.print()
+            return True
+        agent_dir = agents_dir / agent_name
+        scope_label = "project"
+    else:
+        agent_dir = settings.get_agents_root_dir() / agent_name
+        scope_label = "global"
+
+    # Check if agent already exists in the chosen scope
     if agent_dir.exists():
         console.print(
             f"[yellow]Agent '{agent_name}' already exists at {agent_dir}[/yellow]"
         )
         console.print()
         return True
+
+    # Also warn if agent exists in the other scope
+    if use_project:
+        global_agent_dir = settings.get_agents_root_dir() / agent_name
+        if global_agent_dir.exists():
+            console.print(
+                f"[dim]Note: A global agent with the same name exists at {global_agent_dir}[/dim]"
+            )
+            console.print(
+                "[dim]The project agent will take precedence when invoked from this project.[/dim]"
+            )
+            console.print()
+    else:
+        project_agents_dir = settings.get_project_agents_dir()
+        if project_agents_dir:
+            project_agent_dir = project_agents_dir / agent_name
+            if project_agent_dir.exists():
+                console.print(
+                    f"[dim]Note: A project agent with the same name exists at {project_agent_dir}[/dim]"
+                )
+                console.print(
+                    "[dim]The project agent will take precedence when invoked from this project.[/dim]"
+                )
+                console.print()
 
     # Get description
     console.print()
@@ -1585,7 +1661,9 @@ async def _agents_create_interactive(ps, settings) -> bool:
     agent_md.write_text(system_prompt, encoding="utf-8")
 
     console.print()
-    console.print(f"[green]Agent '{agent_name}' created successfully![/green]")
+    console.print(
+        f"[green]Agent '{agent_name}' created successfully! ({scope_label})[/green]"
+    )
     console.print(f"[dim]Location: {agent_dir}[/dim]")
     console.print()
     console.print("[dim]Use @" + agent_name + " <query> to invoke this agent.[/dim]")
@@ -1594,7 +1672,7 @@ async def _agents_create_interactive(ps, settings) -> bool:
 
 
 async def _agents_delete_interactive(ps, settings) -> bool:
-    """Delete an existing agent.
+    """Delete an existing agent from either global or project scope.
 
     Args:
         ps: PromptSession instance
@@ -1609,29 +1687,45 @@ async def _agents_delete_interactive(ps, settings) -> bool:
     console.print("[bold]Delete Agent[/bold]", style=COLORS["primary"])
     console.print()
 
-    agents_dir = settings.get_agents_root_dir()
+    # Get all agents from both scopes
+    all_agents = settings.get_all_agents()
 
-    if not agents_dir.exists():
+    if not all_agents:
         console.print("[yellow]No agents found.[/yellow]")
         console.print()
         return True
 
-    # List available agents
-    agents_found = []
-    for agent_dir in agents_dir.iterdir():
-        if agent_dir.is_dir() and (agent_dir / "agent.md").exists():
-            agents_found.append(agent_dir.name)
+    # Separate by scope for display
+    project_agents = [
+        (name, path) for name, path, scope in all_agents if scope == "project"
+    ]
+    global_agents = [
+        (name, path) for name, path, scope in all_agents if scope == "global"
+    ]
 
-    if not agents_found:
-        console.print("[yellow]No agents found.[/yellow]")
-        console.print()
-        return True
+    # Build a combined list with scope labels
+    agents_list: list[tuple[str, Path, str]] = []
 
     console.print("[bold]Available agents:[/bold]", style=COLORS["primary"])
-    for i, name in enumerate(sorted(agents_found), 1):
-        console.print(f"  {i}. {name}")
-
     console.print()
+
+    idx = 1
+    if project_agents:
+        console.print("[green]Project agents:[/green]")
+        for name, path in sorted(project_agents):
+            console.print(f"  {idx}. {name}")
+            agents_list.append((name, path, "project"))
+            idx += 1
+        console.print()
+
+    if global_agents:
+        console.print("[cyan]Global agents:[/cyan]")
+        for name, path in sorted(global_agents):
+            console.print(f"  {idx}. {name}")
+            agents_list.append((name, path, "global"))
+            idx += 1
+        console.print()
+
     choice = (
         await ps.prompt_async("Choose agent number to delete (or 'cancel'): ")
     ).strip()
@@ -1643,15 +1737,15 @@ async def _agents_delete_interactive(ps, settings) -> bool:
 
     try:
         idx = int(choice) - 1
-        sorted_agents = sorted(agents_found)
-        if 0 <= idx < len(sorted_agents):
-            agent_name = sorted_agents[idx]
+        if 0 <= idx < len(agents_list):
+            agent_name, agent_dir, scope = agents_list[idx]
+            scope_label = "project" if scope == "project" else "global"
 
             # Confirm deletion
             confirm = (
                 (
                     await ps.prompt_async(
-                        f"Delete agent '{agent_name}'? This cannot be undone. (y/N): ",
+                        f"Delete {scope_label} agent '{agent_name}'? This cannot be undone. (y/N): ",
                         default="n",
                     )
                 )
@@ -1660,10 +1754,11 @@ async def _agents_delete_interactive(ps, settings) -> bool:
             )
 
             if confirm == "y":
-                agent_dir = agents_dir / agent_name
                 shutil.rmtree(agent_dir)
                 console.print()
-                console.print(f"[green]Agent '{agent_name}' deleted.[/green]")
+                console.print(
+                    f"[green]{scope_label.capitalize()} agent '{agent_name}' deleted.[/green]"
+                )
             else:
                 console.print()
                 console.print("[dim]Cancelled[/dim]")
@@ -1720,15 +1815,27 @@ async def invoke_subagent(
     )
     from namicode_cli.file_ops import FileOpTracker
 
-    # 1. Load agent.md from ~/.nami/agents/<agent_name>/
-    agent_dir = settings.get_agents_root_dir() / agent_name
-    agent_md_path = agent_dir / "agent.md"
+    # 1. Find agent - checks project scope first, then global
+    agent_location = settings.find_agent(agent_name)
 
-    if not agent_md_path.exists():
+    if not agent_location:
         return f"Error: Agent '{agent_name}' not found."
+
+    agent_dir, scope = agent_location
+    agent_md_path = agent_dir / "agent.md"
 
     try:
         system_prompt = agent_md_path.read_text(encoding="utf-8")
+
+        # Debugging info
+
+        # Show which scope the agent is from
+        # scope_label = "project" if scope == "project" else "global"
+        # console.print(f"[dim]Using {scope_label} agent: {agent_name}[/dim]")
+        # console.print(f"[dim]Agent path: {agent_md_path}[/dim]")
+        # Show first line of prompt to verify correct file loaded
+        # first_line = system_prompt.split("\n")[0][:60]
+        # console.print(f"[dim]Prompt starts: {first_line}...[/dim]")
     except Exception as e:
         return f"Error reading agent configuration: {e}"
 

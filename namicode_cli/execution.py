@@ -1,4 +1,29 @@
-"""Task execution and streaming logic for the CLI."""
+"""Task execution and streaming logic for the CLI.
+
+This module handles the execution of deep agent tasks and streaming of results
+to the terminal. It provides:
+
+- Streaming execution of agent tasks with real-time output
+- Human-in-the-loop approval for destructive operations
+- Tool call visualization and diff previews
+- Error handling and recovery
+- Context window management and token tracking
+
+Key Components:
+- execute_task(): Main task execution with streaming
+- prompt_for_tool_approval(): Interactive approval UI for tool calls
+- process_streaming_response(): Handle streaming agent responses
+- render_tool_message(): Display tool execution results
+
+The execution flow:
+1. Execute agent with streaming enabled
+2. Process tool calls and request approval if needed
+3. Render tool results and output to terminal
+4. Track token usage and context window
+5. Handle errors and provide recovery options
+- UI rendering functions for formatted output
+- Token usage tracking and context management
+"""
 
 import asyncio
 import json

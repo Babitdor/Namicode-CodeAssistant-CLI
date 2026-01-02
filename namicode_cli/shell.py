@@ -1,4 +1,31 @@
-"""Simplified middleware that exposes a basic shell tool to agents."""
+"""Simplified middleware that exposes a basic shell tool to agents.
+
+This module provides ShellMiddleware, which integrates shell command execution
+into the deep agent with intelligent prompt detection and server management:
+
+Key Features:
+- Shell tool for executing commands in the local environment
+- Interactive prompt detection to prevent hanging on user input
+- Server startup pattern recognition for long-running processes
+- Background process management for dev servers
+- Cross-platform support (Windows, Linux, macOS)
+
+ShellMiddleware provides:
+- Automatic shell tool registration with the agent
+- Detection of interactive prompts (y/n, password, etc.)
+- Recognition of server startup patterns (listening, ready, etc.)
+- Support for background processes and server management
+- Error handling and timeout management
+
+Detection Patterns:
+- PROMPT_PATTERNS: Regex patterns for interactive prompts requiring user input
+- SERVER_READY_PATTERNS: Regex patterns for successful server startup
+
+This middleware ensures safe and reliable shell command execution by:
+1. Blocking interactive commands that would hang waiting for input
+2. Recognizing when dev servers start successfully
+3. Managing background processes for long-running services
+"""
 
 from __future__ import annotations
 

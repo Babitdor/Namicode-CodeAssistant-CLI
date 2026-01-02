@@ -1,4 +1,27 @@
-"""Agent management and creation for the CLI."""
+"""Agent management and creation for the CLI.
+
+This module handles the creation, configuration, and management of LangGraph
+deep agents for the Nami-Code CLI. It provides:
+
+- Agent creation with custom system prompts and tool configurations
+- Management of agent profiles (global and project-specific)
+- Integration with middleware components (memory, skills, MCP, shell)
+- Support for multiple backends (local filesystem and sandboxes)
+- Agent memory management and persistence
+
+Key Components:
+- create_agent_with_config(): Create a fully configured deep agent
+- list_agents(): Display available agent profiles
+- reset_agent(): Reset an agent to default configuration
+- Agent profiles stored in ~/.nami/agents/<name>/agent.md
+
+The agent is built using LangGraph's Pregel architecture with:
+- Planning capability via write_todos tool
+- Subagent delegation via task tool
+- File system access via CompositeBackend
+- Middleware for memory, skills, MCP, and shell execution
+- Checkpointing for conversation state persistence
+"""
 
 import os
 import shutil

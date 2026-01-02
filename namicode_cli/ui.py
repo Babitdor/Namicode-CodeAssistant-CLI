@@ -1,4 +1,35 @@
-"""UI rendering and display utilities for the CLI."""
+"""UI rendering and display utilities for the CLI.
+
+This module provides rich console-based UI components and formatting functions:
+
+Key Components:
+- TokenTracker: Track and display token usage statistics
+- show_help(): Display help information for CLI commands
+- format_tool_display(): Format tool calls for display
+- format_tool_message_content(): Format tool execution results
+- render_diff_block(): Render code diffs with syntax highlighting
+- render_file_operation(): Display file operations with formatting
+- render_todo_list(): Display task lists with progress indicators
+
+Features:
+- Rich console output with colors and formatting
+- Token usage tracking and context window display
+- Tool call visualization with arguments and results
+- Code diff rendering with line-by-line comparison
+- Todo list rendering with status indicators
+- Markdown rendering for rich text content
+
+Color Scheme:
+Uses the COLORS constant from config.py for consistent styling:
+- primary: Bright red for headings and primary actions
+- secondary: Deep red for highlights
+- success: Green for success states
+- error: Deep red for errors
+- warning: Orange for warnings
+
+The UI is built on Rich library for terminal formatting and uses
+consistent styling across all components.
+"""
 
 import json
 import re

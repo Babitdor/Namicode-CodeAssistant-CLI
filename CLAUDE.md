@@ -58,7 +58,7 @@ The CLI implements a "Deep Agent" pattern with four key components:
 | `agent.py` | Agent creation via `create_agent_with_config()` |
 | `config.py` | Environment, project detection, model creation |
 | `execution.py` | Task execution, streaming, tool approval |
-| `tools.py` | Built-in tools (http_request, fetch_url, web_search) |
+| `tools.py` | Built-in tools (fetch_url, web_search, run_tests, start_dev_server) |
 | `file_ops.py` | File operations (ls, read, write, edit, glob, grep) |
 | `skills/` | Progressive disclosure skill system |
 | `mcp/` | Model Context Protocol integration |
@@ -140,6 +140,7 @@ Project roots are detected by checking for these markers (in order):
 - Python: 3.11+, use `T | None` not `Optional[T]`
 - Tests: Allow `D1` (docs), `S101` (asserts), `S311` (random), `ANN201`, `INP001`, `PLR2004`
 - CLI files: Allow `T201` (print statements)
+- **Comments**: Always use proper comments when writing code - Add descriptive comments explaining logic, purpose, and implementation details
 
 ## Testing Notes
 
@@ -162,10 +163,14 @@ Project roots are detected by checking for these markers (in order):
 4. `execution.py::execute_task()` - Handles task execution, streaming, tool approval
 
 ### Tool Approval System
-Potentially destructive operations require user approval via `PathApprovalManager`:
-- File writes/edits outside project root
-- Shell commands (unless `--auto-approve` flag)
-- Configured via interrupt_on in agent creation
+Potentially destructive operations require user approval (configured via `interrupt_on` in agent creation):
+- `shell` / `execute` - Command execution
+- `write_file` / `edit_file` - File modifications
+- `web_search` / `fetch_url` - Network operations (uses API credits)
+- `task` - Subagent delegation
+- `run_tests` / `start_dev_server` - Test and server operations
+
+Use `--auto-approve` flag to skip approval prompts.
 
 ### Skills System (Progressive Disclosure)
 Skills are defined in `SKILL.md` files with YAML frontmatter:
@@ -181,10 +186,17 @@ Agent sees only name+description at startup, reads full content when relevant.
 
 ### Deepagents Factory (`create_deep_agent`)
 The `create_deep_agent()` factory in `deepagents-nami/nami_deepagents/graph.py`:
-- Automatically attaches TodoList, Filesystem, and SubAgent middleware
+- Automatically attaches TodoList, Filesystem, SubAgent, and Summarization middleware
 - Accepts custom middleware, tools, subagents
 - Returns a compiled LangGraph `CompiledStateGraph`
 - Default model: `claude-sonnet-4-5-20250929`
+- Includes `SummarizationMiddleware` for automatic context management (triggers at 85% of max tokens)
+- Recursion limit: 1000
+
+### Shell vs Execute Tools
+- **Local mode**: Uses `shell` tool (via ShellMiddleware) for command execution
+- **Sandbox mode**: Uses `execute` tool (via SandboxBackendProtocol) for remote execution
+- The `execute` tool is only available when a sandbox backend is configured
 
 ### Local Dependency
 The CLI depends on `nami-deepagents` as a local path dependency:

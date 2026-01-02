@@ -1,4 +1,27 @@
-"""Main entry point and CLI loop for deepagents."""
+"""Main entry point and CLI loop for deepagents.
+
+This module provides the primary CLI interface for Nami-Code CLI, including:
+- Command-line argument parsing and validation
+- Interactive REPL loop for agent conversations
+- Session management (save, restore, auto-save)
+- Command handling for special CLI commands (/help, /tokens, etc.)
+- Integration with sandbox backends and agent configuration
+- Auto-save functionality for session persistence
+
+The CLI loop handles:
+1. Agent initialization with configuration and backends
+2. User input collection via prompt_toolkit
+3. Task execution through the deep agent
+4. Tool approval and human-in-the-loop interaction
+5. Output streaming and UI rendering
+6. Session state management and persistence
+
+Key Functions:
+- parse_args(): Parse command-line arguments
+- cli_main(): Main entry point for the CLI
+- run_cli_session(): Execute the interactive CLI loop
+- handle_command(): Handle special CLI commands (e.g., /help, /tokens)
+"""
 
 import argparse
 import asyncio
