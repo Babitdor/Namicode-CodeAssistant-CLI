@@ -120,22 +120,17 @@ def _find_project_agent_md(project_root: Path) -> list[Path]:
     if claude_dir_md.exists():
         paths.append(claude_dir_md)
 
-    # Priority 2: .nami/agent.md (DeepAgents style)
-    deepagents_md = project_root / ".nami" / "agent.md"
-    if deepagents_md.exists():
-        paths.append(deepagents_md)
-
-    # Priority 3: CLAUDE.md in root (Claude Code fallback)
+    # Priority 2: CLAUDE.md in root (Claude Code fallback)
     root_claude_md = project_root / "CLAUDE.md"
     if root_claude_md.exists():
         paths.append(root_claude_md)
 
-    # Priority 4: NAMI.md in root (created by /init command)
+    # Priority 3: NAMI.md in root (created by /init command)
     root_nami_md = project_root / "NAMI.md"
     if root_nami_md.exists():
         paths.append(root_nami_md)
 
-    # Priority 5: agent.md in root (DeepAgents fallback)
+    # Priority 4: agent.md in root (DeepAgents fallback)
     root_agent_md = project_root / "agent.md"
     if root_agent_md.exists():
         paths.append(root_agent_md)

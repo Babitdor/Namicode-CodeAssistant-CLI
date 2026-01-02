@@ -2,7 +2,12 @@
 
 import contextlib
 from collections.abc import Awaitable, Callable
-from typing import NotRequired, TypedDict, cast
+from typing import TypedDict, cast
+
+try:
+    from typing import NotRequired
+except ImportError:
+    from typing_extensions import NotRequired
 
 from langchain.agents.middleware.types import (
     AgentMiddleware,
@@ -10,7 +15,7 @@ from langchain.agents.middleware.types import (
     ModelRequest,
     ModelResponse,
 )
-from langgraph.runtime import Runtime
+# from langgraph.runtime import Runtime
 
 from namicode_cli.config import Settings
 
@@ -53,11 +58,11 @@ Your long-term memory is stored in files on the filesystem and persists across s
 
 Your system prompt is loaded from TWO sources at startup:
 1. **User agent.md**: `{agent_dir_absolute}/agent.md` - Your personal preferences across all projects
-2. **Project agent.md**: Loaded from project root if available - Project-specific instructions
+2. **Project NAMI.md**: Loaded from project root if available - Project-specific instructions
 
-Project-specific agent.md is loaded from these locations (both combined if both exist):
-- `[project-root]/.nami/agent.md` (preferred)
-- `[project-root]/agent.md` (fallback, but also included if both exist)
+Project-specific NAMI.md is loaded from these locations (both combined if both exist):
+- `[project-root]/.nami/NAMI.md` (preferred)
+- `[project-root]/NAMI.md` (fallback, but also included if both exist)
 
 **When to CHECK/READ memories (CRITICAL - do this FIRST):**
 - **At the start of ANY new session**: Check both user and project memories
@@ -148,9 +153,9 @@ edit_file '{agent_dir_absolute}/agent.md' ...        # Update user preferences
 **Project memory (preferred for project-specific information):**
 ```
 ls {project_deepagents_dir}                          # List project memory files
-read_file '{project_deepagents_dir}/agent.md'        # Read project instructions
-edit_file '{project_deepagents_dir}/agent.md' ...    # Update project instructions
-write_file '{project_deepagents_dir}/agent.md' ...  # Create project memory file
+read_file '{project_deepagents_dir}/NAMI.md'        # Read project instructions
+edit_file '{project_deepagents_dir}/NAMI.md' ...    # Update project instructions
+write_file '{project_deepagents_dir}/NAMI.md' ...  # Create project memory file
 ```
 
 **Important**:
@@ -210,11 +215,11 @@ class AgentMemoryMiddleware(AgentMiddleware):
     def before_agent(
         self,
         state: AgentMemoryState,
-        runtime: Runtime,
+        # runtime: Runtime,
     ) -> AgentMemoryStateUpdate:
         """Load agent memory from file before agent execution.
 
-        Loads both user agent.md and project-specific agent.md if available.
+        Loads both user agent.md and project-specific NAMI.md if available.
         Only loads if not already present in state.
 
         Dynamically checks for file existence on every call to catch user updates.
@@ -263,7 +268,7 @@ class AgentMemoryMiddleware(AgentMiddleware):
         if self.project_root and project_memory:
             project_memory_info = f"`{self.project_root}` (detected)"
         elif self.project_root:
-            project_memory_info = f"`{self.project_root}` (no agent.md found)"
+            project_memory_info = f"`{self.project_root}` (no NAMI.md found)"
         else:
             project_memory_info = "None (not in a git project)"
 
@@ -276,7 +281,7 @@ class AgentMemoryMiddleware(AgentMiddleware):
         # Format memory section with both memories
         memory_section = self.system_prompt_template.format(
             user_memory=user_memory if user_memory else "(No user agent.md)",
-            project_memory=project_memory if project_memory else "(No project agent.md)",
+            project_memory=project_memory if project_memory else "(No project NAMI.md)",
         )
 
         system_prompt = memory_section

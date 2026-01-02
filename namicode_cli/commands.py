@@ -64,7 +64,7 @@ async def _handle_init_command(
     console.print()
 
     # Check if NAMI.md already exists
-    nami_md_path = project_root / "NAMI.md"
+    nami_md_path = project_root / ".nami" / "NAMI.md"
     if nami_md_path.exists():
         console.print("⚠️  ", style="yellow", end="")
         console.print("[yellow]NAMI.md already exists[/yellow]")
@@ -1713,7 +1713,11 @@ async def invoke_subagent(
     from nami_deepagents.backends.filesystem import FilesystemBackend
     from pathlib import Path
     from rich.markdown import Markdown
-    from namicode_cli.ui import format_tool_display, render_file_operation, render_todo_list
+    from namicode_cli.ui import (
+        format_tool_display,
+        render_file_operation,
+        render_todo_list,
+    )
     from namicode_cli.file_ops import FileOpTracker
 
     # 1. Load agent.md from ~/.nami/agents/<agent_name>/
@@ -1858,7 +1862,9 @@ Guidelines:
         has_responded = False
 
         # Initialize FileOpTracker for file operation tracking with diffs
-        file_op_tracker = FileOpTracker(assistant_id=agent_name, backend=subagent_backend)
+        file_op_tracker = FileOpTracker(
+            assistant_id=agent_name, backend=subagent_backend
+        )
 
         # Track current todos for change detection
         current_todos: list[dict] = []
@@ -1960,13 +1966,19 @@ Guidelines:
                                     pending_text += content
                                 elif isinstance(content, list):
                                     for item in content:
-                                        if isinstance(item, dict) and item.get("type") == "text":
+                                        if (
+                                            isinstance(item, dict)
+                                            and item.get("type") == "text"
+                                        ):
                                             pending_text += item.get("text", "")
                                         elif isinstance(item, str):
                                             pending_text += item
 
                             # Process content_blocks for tool calls
-                            if hasattr(message, "content_blocks") and message.content_blocks:
+                            if (
+                                hasattr(message, "content_blocks")
+                                and message.content_blocks
+                            ):
                                 for block in message.content_blocks:
                                     block_type = block.get("type")
 
@@ -1989,11 +2001,18 @@ Guidelines:
                                         elif chunk_id is not None:
                                             buffer_key = chunk_id
                                         else:
-                                            buffer_key = f"unknown-{len(tool_call_buffers)}"
+                                            buffer_key = (
+                                                f"unknown-{len(tool_call_buffers)}"
+                                            )
 
                                         buffer = tool_call_buffers.setdefault(
                                             buffer_key,
-                                            {"name": None, "id": None, "args": None, "args_parts": []},
+                                            {
+                                                "name": None,
+                                                "id": None,
+                                                "args": None,
+                                                "args_parts": [],
+                                            },
                                         )
 
                                         if chunk_name:
@@ -2005,7 +2024,9 @@ Guidelines:
                                             buffer["args"] = chunk_args
                                             buffer["args_parts"] = []
                                         elif isinstance(chunk_args, str) and chunk_args:
-                                            parts: list[str] = buffer.setdefault("args_parts", [])
+                                            parts: list[str] = buffer.setdefault(
+                                                "args_parts", []
+                                            )
                                             if not parts or chunk_args != parts[-1]:
                                                 parts.append(chunk_args)
                                             buffer["args"] = "".join(parts)
@@ -2032,7 +2053,10 @@ Guidelines:
                                             parsed_args = {"value": parsed_args}
 
                                         # Display tool call (deduplicated)
-                                        if buffer_id is not None and buffer_id not in displayed_tool_ids:
+                                        if (
+                                            buffer_id is not None
+                                            and buffer_id not in displayed_tool_ids
+                                        ):
                                             displayed_tool_ids.add(buffer_id)
                                             tool_call_buffers.pop(buffer_key, None)
                                             icon = tool_icons.get(buffer_name, "🔧")
@@ -2046,7 +2070,9 @@ Guidelines:
                                                 status.stop()
                                                 spinner_active = False
 
-                                            display_str = format_tool_display(buffer_name, parsed_args)
+                                            display_str = format_tool_display(
+                                                buffer_name, parsed_args
+                                            )
                                             console.print(
                                                 f"  {icon} {display_str}",
                                                 style=f"dim {COLORS['tool']}",
@@ -2064,9 +2090,13 @@ Guidelines:
             if spinner_active:
                 status.stop()
                 spinner_active = False
-            console.print(f"[dim]Streaming error: {stream_error}, using direct invoke[/dim]")
+            console.print(
+                f"[dim]Streaming error: {stream_error}, using direct invoke[/dim]"
+            )
 
-            result = await subagent.ainvoke({"messages": [HumanMessage(content=query)]}, config=config)
+            result = await subagent.ainvoke(
+                {"messages": [HumanMessage(content=query)]}, config=config
+            )
             if "messages" in result and result["messages"]:
                 final_message = result["messages"][-1]
                 if hasattr(final_message, "content"):
@@ -2099,7 +2129,9 @@ Guidelines:
 
         # If streaming didn't capture response, try ainvoke as fallback
         console.print("[dim]No streaming response, trying direct invoke...[/dim]")
-        result = await subagent.ainvoke({"messages": [HumanMessage(content=query)]}, config=config)
+        result = await subagent.ainvoke(
+            {"messages": [HumanMessage(content=query)]}, config=config
+        )
         if "messages" in result and result["messages"]:
             final_message = result["messages"][-1]
             if hasattr(final_message, "content"):
