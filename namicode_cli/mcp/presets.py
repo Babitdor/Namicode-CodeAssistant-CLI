@@ -114,17 +114,6 @@ MCP_PRESETS: dict[str, dict[str, Any]] = {
             "env": {},
         },
     },
-    "puppeteer": {
-        "name": "Puppeteer MCP",
-        "description": "Browser automation for web scraping",
-        "package": "@modelcontextprotocol/server-puppeteer",
-        "config": {
-            "transport": "stdio",
-            "command": "npx",
-            "args": ["-y", "@modelcontextprotocol/server-puppeteer"],
-            "env": {},
-        },
-    },
     "playwright": {
         "name": "Playwright MCP",
         "description": "Browser automation using Playwright for web scraping and testing",
@@ -133,6 +122,7 @@ MCP_PRESETS: dict[str, dict[str, Any]] = {
             "transport": "stdio",
             "command": "npx",
             "args": [
+                "-y",
                 "@playwright/mcp@latest",
                 "--headless",
             ],  # Headless by default; remove for headed

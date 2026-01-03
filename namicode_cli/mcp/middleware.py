@@ -18,6 +18,7 @@ from langchain.agents.middleware.types import (
 from langchain_core.tools import StructuredTool
 from langgraph.runtime import Runtime
 
+from namicode_cli.config import console
 from namicode_cli.mcp.client import MCPClient
 from namicode_cli.mcp.config import MCPConfig
 
@@ -25,7 +26,7 @@ from namicode_cli.mcp.config import MCPConfig
 class MCPState(AgentState):
     """State for the MCP middleware."""
 
-    mcp_tools: NotRequired[list[dict[str, Any]]]
+    mcp_tools: NotRequired[list[dict[str, Any]]] # type: ignore
     """List of MCP tools metadata (name, description, server)."""
 
 
@@ -103,6 +104,9 @@ class MCPMiddleware(AgentMiddleware):
     def __init__(self, config_path: Path | None = None) -> None:
         """Initialize the MCP middleware.
 
+        Discovers MCP tools synchronously at init time so they can be
+        registered with the agent.
+
         Args:
             config_path: Optional path to mcp.json config file.
                        Defaults to ~/.nami/mcp.json
@@ -111,30 +115,44 @@ class MCPMiddleware(AgentMiddleware):
         self.clients: dict[str, MCPClient] = {}
         self._tools_cache: list[dict[str, Any]] = []
 
-    async def on_session_start(
-        self,
-        runtime: Runtime,
-        *,
-        state: MCPState,
-    ) -> MCPStateUpdate | None:
-        """Initialize MCP servers and discover tools at session start.
+        # Discover tools synchronously at init time
+        self._discover_tools_sync()
 
-        Args:
-            runtime: The LangGraph runtime instance
-            state: Current agent state
+        # Create and register tools with the middleware
+        self.tools = self._create_mcp_tools()
 
-        Returns:
-            State update with MCP tools metadata, or None if no servers configured
+    def _discover_tools_sync(self) -> None:
+        """Discover tools from all configured MCP servers synchronously.
+
+        This runs at __init__ time to ensure tools are available when
+        the middleware is registered with the agent.
         """
-        # Load MCP server configurations
         servers = self.mcp_config.list_servers()
 
         if not servers:
-            # No MCP servers configured
-            return None
+            return
 
-        # Initialize clients and discover tools
-        tools_metadata = []
+        # Run async discovery in a sync context
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # If we're already in an async context, create a new loop
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    future = executor.submit(asyncio.run, self._discover_tools_async(servers))
+                    future.result(timeout=60)  # 60 second timeout
+            else:
+                loop.run_until_complete(self._discover_tools_async(servers))
+        except RuntimeError:
+            # No event loop exists, create one
+            asyncio.run(self._discover_tools_async(servers))
+
+    async def _discover_tools_async(self, servers: dict[str, Any]) -> None:
+        """Async implementation of tool discovery.
+
+        Args:
+            servers: Dictionary of server name to MCPServerConfig
+        """
         for name, config in servers.items():
             try:
                 client = MCPClient(name, config)
@@ -144,32 +162,45 @@ class MCPMiddleware(AgentMiddleware):
                 tools = await client.list_tools()
 
                 for tool in tools:
-                    tools_metadata.append({
+                    self._tools_cache.append({
                         "name": tool["name"],
                         "description": tool["description"],
                         "server": name,
                         "inputSchema": tool["inputSchema"],
                     })
 
+                console.print(
+                    f"[dim]MCP: Connected to '{name}' ({len(tools)} tools)[/dim]"
+                )
+
             except Exception as e:
-                # Log error but continue with other servers
-                print(f"Warning: Failed to connect to MCP server '{name}': {e}")
+                console.print(
+                    f"[yellow]Warning: Failed to connect to MCP server '{name}': {e}[/yellow]"
+                )
                 continue
 
-        self._tools_cache = tools_metadata
+    async def on_session_start(
+        self,
+        runtime: Runtime,
+        *,
+        state: MCPState,
+    ) -> MCPStateUpdate | None:
+        """Store MCP tools metadata in state at session start.
 
-        # Inject MCP system prompt
-        servers_list = self._format_servers_list(servers, tools_metadata)
-        mcp_prompt = MCP_SYSTEM_PROMPT.format(servers_list=servers_list)
+        Tools are already discovered at __init__ time, so this just
+        stores the metadata in state for use in system prompt injection.
 
-        # Append to system prompt
-        if "system_messages" in state:
-            state["system_messages"].append(mcp_prompt)
-        else:
-            # Fallback: add to state for later injection
-            state["mcp_system_prompt"] = mcp_prompt  # type: ignore[typeddict-item]
+        Args:
+            runtime: The LangGraph runtime instance
+            state: Current agent state
 
-        return {"mcp_tools": tools_metadata}
+        Returns:
+            State update with MCP tools metadata, or None if no tools
+        """
+        if not self._tools_cache:
+            return None
+
+        return {"mcp_tools": self._tools_cache}
 
     def _format_servers_list(
         self,
@@ -318,8 +349,10 @@ class MCPMiddleware(AgentMiddleware):
 
         return call_mcp_tool
 
-    def create_mcp_tools(self) -> list[StructuredTool]:
+    def _create_mcp_tools(self) -> list[StructuredTool]:
         """Create LangChain tools from MCP tools metadata.
+
+        Called at __init__ time to populate self.tools.
 
         Returns:
             List of StructuredTool instances that wrap MCP tool calls
@@ -333,9 +366,10 @@ class MCPMiddleware(AgentMiddleware):
             # Use factory method to properly capture server_name and tool_name
             call_mcp_tool = self._create_mcp_tool_caller(server_name, tool_name)
 
-            # Create StructuredTool
+            # Create StructuredTool with async coroutine support
             structured_tool = StructuredTool.from_function(
                 func=call_mcp_tool,
+                coroutine=call_mcp_tool,  # Properly register as async
                 name=f"{server_name}__{tool_name}",
                 description=tool_meta["description"],
                 args_schema=tool_meta.get("inputSchema"),

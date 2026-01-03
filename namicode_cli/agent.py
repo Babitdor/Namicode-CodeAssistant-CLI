@@ -482,7 +482,7 @@ def create_agent_with_config(
         sandbox_type: Type of sandbox provider ("modal", "runloop", "daytona")
 
     Returns:
-        2-tuple of graph and backend
+        2-tuple of (graph, backend)
     """
     # Setup agent directory for persistent memory (same for both local and remote modes)
     agent_dir = settings.ensure_agent_dir(assistant_id)
@@ -497,6 +497,9 @@ def create_agent_with_config(
     # Project-level skills directories (if in a project)
     # Supports both .claude/skills/ and .nami/skills/
     project_skills_dirs = settings.get_project_skills_dirs()
+
+    # Create MCP middleware once (shared across modes for cleanup)
+    mcp_middleware = MCPMiddleware()
 
     # CONDITIONAL SETUP: Local vs Remote Sandbox
     if sandbox is None:
@@ -515,7 +518,7 @@ def create_agent_with_config(
                 assistant_id=assistant_id,
                 project_skills_dirs=project_skills_dirs,
             ),
-            MCPMiddleware(),
+            mcp_middleware,
             ShellMiddleware(
                 workspace_root=str(Path.cwd()),
                 env=dict(os.environ),
@@ -539,7 +542,7 @@ def create_agent_with_config(
                 assistant_id=assistant_id,
                 project_skills_dirs=project_skills_dirs,
             ),
-            MCPMiddleware(),
+            mcp_middleware,
         ]
 
     # Get the system prompt (sandbox-aware and with skills)

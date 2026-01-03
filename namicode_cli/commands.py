@@ -1827,15 +1827,6 @@ async def invoke_subagent(
     try:
         system_prompt = agent_md_path.read_text(encoding="utf-8")
 
-        # Debugging info
-
-        # Show which scope the agent is from
-        # scope_label = "project" if scope == "project" else "global"
-        # console.print(f"[dim]Using {scope_label} agent: {agent_name}[/dim]")
-        # console.print(f"[dim]Agent path: {agent_md_path}[/dim]")
-        # Show first line of prompt to verify correct file loaded
-        # first_line = system_prompt.split("\n")[0][:60]
-        # console.print(f"[dim]Prompt starts: {first_line}...[/dim]")
     except Exception as e:
         return f"Error reading agent configuration: {e}"
 
