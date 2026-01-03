@@ -154,7 +154,7 @@ class SkillsMiddleware(AgentMiddleware):
             Display path using ~ notation for home directory.
         """
         # Use the per-agent path format
-        return f"~/.deepagents/{self.assistant_id}/skills"
+        return f"~/.nami/{self.assistant_id}/skills"
 
     @property
     def skills_dir_absolute(self) -> str:
