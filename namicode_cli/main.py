@@ -23,9 +23,25 @@ Key Functions:
 - handle_command(): Handle special CLI commands (e.g., /help, /tokens)
 """
 
+# Suppress transformer warnings before any imports that might trigger them
+import warnings
+import os
+
+# Suppress "None of PyTorch, TensorFlow >= 2.0, or Flax have been found" warning
+os.environ["TRANSFORMERS_VERBOSITY"] = "error"
+
+# Suppress token sequence length warnings from transformers/tiktoken
+warnings.filterwarnings(
+    "ignore",
+    message="Token indices sequence length is longer than",
+)
+warnings.filterwarnings(
+    "ignore",
+    message="None of PyTorch, TensorFlow",
+)
+
 import argparse
 import asyncio
-import os
 import signal
 import sys
 import time
@@ -563,21 +579,16 @@ async def simple_cli(
             )
             console.print()
 
-            result = await invoke_subagent(
+            # invoke_subagent handles display internally via streaming
+            await invoke_subagent(
                 agent_name=agent_name,
                 query=query,
                 main_agent=agent,
                 settings=settings,
                 session_state=session_state,
-                backend=backend,  # Pass the same backend so subagent has filesystem access
+                backend=backend,
             )
 
-            # Display result
-            console.print(f"[bold cyan]@{agent_name}:[/bold cyan]")
-            console.print()
-            from rich.markdown import Markdown
-
-            console.print(Markdown(result))
             console.print()
             continue
 
@@ -623,11 +634,6 @@ async def _run_agent_session(
     tools = [
         http_request,
         fetch_url,
-        # run_code,
-        # file_diff,
-        # git_command,
-        # tree_view,
-        # Code execution and dev server tools
         run_tests_tool,
         start_dev_server_tool,
         stop_server_tool,

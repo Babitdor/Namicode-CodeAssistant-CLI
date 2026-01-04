@@ -407,47 +407,47 @@ def _add_interrupt_on() -> dict[str, InterruptOnConfig]:
     """Configure human-in-the-loop interrupt_on settings for destructive tools."""
     shell_interrupt_config: InterruptOnConfig = {
         "allowed_decisions": ["approve", "reject"],
-        "description": _format_shell_description,
+        "description": _format_shell_description,  # type: ignore
     }
 
     execute_interrupt_config: InterruptOnConfig = {
         "allowed_decisions": ["approve", "reject"],
-        "description": _format_execute_description,
+        "description": _format_execute_description,  # type: ignore
     }
 
     write_file_interrupt_config: InterruptOnConfig = {
         "allowed_decisions": ["approve", "reject"],
-        "description": _format_write_file_description,
+        "description": _format_write_file_description,  # type: ignore
     }
 
     edit_file_interrupt_config: InterruptOnConfig = {
         "allowed_decisions": ["approve", "reject"],
-        "description": _format_edit_file_description,
+        "description": _format_edit_file_description,  # type: ignore
     }
 
     web_search_interrupt_config: InterruptOnConfig = {
         "allowed_decisions": ["approve", "reject"],
-        "description": _format_web_search_description,
+        "description": _format_web_search_description,  # type: ignore
     }
 
     fetch_url_interrupt_config: InterruptOnConfig = {
         "allowed_decisions": ["approve", "reject"],
-        "description": _format_fetch_url_description,
+        "description": _format_fetch_url_description,  # type: ignore
     }
 
     task_interrupt_config: InterruptOnConfig = {
         "allowed_decisions": ["approve", "reject"],
-        "description": _format_task_description,
+        "description": _format_task_description,  # type: ignore
     }
 
     run_tests_interrupt_config: InterruptOnConfig = {
         "allowed_decisions": ["approve", "reject"],
-        "description": _format_run_tests_description,
+        "description": _format_run_tests_description,  # type: ignore
     }
 
     start_dev_server_interrupt_config: InterruptOnConfig = {
         "allowed_decisions": ["approve", "reject"],
-        "description": _format_start_dev_server_description,
+        "description": _format_start_dev_server_description,  # type: ignore
     }
 
     return {
@@ -556,11 +556,12 @@ def create_agent_with_config(
         model=model,
         system_prompt=system_prompt,
         tools=tools,
-        backend=composite_backend,
+        checkpointer=InMemorySaver(),
+        backend=composite_backend,  # type: ignore
         middleware=agent_middleware,
-        interrupt_on=interrupt_on,
-    ).with_config(config)
-
-    agent.checkpointer = InMemorySaver()
+        interrupt_on=interrupt_on,  # type: ignore
+    ).with_config(
+        config  # type: ignore
+    )
 
     return agent, composite_backend

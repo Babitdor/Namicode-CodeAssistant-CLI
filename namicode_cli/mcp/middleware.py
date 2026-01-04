@@ -4,11 +4,12 @@ This middleware loads MCP server configurations, discovers their tools,
 and makes them available to the agent as callable functions.
 
 Uses langchain-mcp-adapters for robust MCP client management with
-persistent connections.
+persistent connections for stateful MCP servers.
 """
 
 import asyncio
-from collections.abc import Awaitable, Callable
+import contextlib
+from collections.abc import AsyncIterator, Awaitable, Callable
 from pathlib import Path
 from typing import Any, NotRequired, TypedDict
 
@@ -20,6 +21,7 @@ from langchain.agents.middleware.types import (
 )
 from langchain_core.tools import BaseTool
 from langgraph.runtime import Runtime
+from mcp.client.session import ClientSession
 
 from namicode_cli.config import console
 from namicode_cli.mcp.client import MultiServerMCPClient, create_mcp_client
@@ -95,8 +97,8 @@ class MCPMiddleware(AgentMiddleware):
     This middleware:
     - Loads MCP server configurations from ~/.nami/mcp.json
     - Discovers tools from configured MCP servers using langchain-mcp-adapters
+    - Maintains persistent sessions for stateful MCP servers
     - Registers MCP tools with the agent
-    - Handles tool calls by routing them to the appropriate MCP server
 
     Args:
         config_path: Optional path to mcp.json config file
@@ -118,6 +120,9 @@ class MCPMiddleware(AgentMiddleware):
         self._client: MultiServerMCPClient | None = None
         self._tools_cache: list[dict[str, Any]] = []
         self.tools: list[BaseTool] = []
+        # Track persistent sessions for stateful servers
+        self._sessions: dict[str, ClientSession] = {}
+        self._session_contexts: list[contextlib.AbstractAsyncContextManager[Any]] = []
 
         # Discover tools synchronously at init time
         self._discover_tools_sync()
@@ -150,55 +155,70 @@ class MCPMiddleware(AgentMiddleware):
             asyncio.run(self._discover_tools_async())
 
     async def _discover_tools_async(self) -> None:
-        """Async implementation of tool discovery using MultiServerMCPClient."""
-        try:
-            # Create the MCP client
-            self._client = create_mcp_client(self.mcp_config)
+        """Async implementation of tool discovery using MultiServerMCPClient.
 
-            # Get tools from all configured servers
-            mcp_tools = await self._client.get_tools()
+        Creates a single combined client and discovers tools from all servers.
+        Tools loaded this way will create sessions on-demand for each invocation.
+        """
+        from langchain_mcp_adapters.tools import load_mcp_tools
 
-            if not mcp_tools:
-                return
+        from namicode_cli.mcp.client import build_mcp_config_dict
 
-            # Store tools for the agent
-            self.tools = list(mcp_tools)
+        servers = self.mcp_config.list_servers()
 
-            # Build tools metadata cache for system prompt
-            servers = self.mcp_config.list_servers()
-            for tool in mcp_tools:
-                # Extract server name from tool name (format: server__toolname)
-                tool_name = tool.name
-                server_name = None
+        if not servers:
+            return
 
-                # Try to match tool to a server
-                for name in servers:
-                    if tool_name.startswith(f"{name}__"):
-                        server_name = name
-                        break
+        # Build combined config for all servers
+        config_dict = build_mcp_config_dict(self.mcp_config)
 
-                if server_name is None:
-                    # Fallback: use first part before __ as server name
-                    parts = tool_name.split("__", 1)
-                    server_name = parts[0] if len(parts) > 1 else "unknown"
+        if not config_dict:
+            return
 
-                self._tools_cache.append({
-                    "name": tool_name,
-                    "description": tool.description or "",
-                    "server": server_name,
-                })
+        # Create the combined client
+        self._client = MultiServerMCPClient(config_dict)
 
-            # Count tools per server for status message
-            server_counts: dict[str, int] = {}
-            for tool_meta in self._tools_cache:
-                server = tool_meta["server"]
-                server_counts[server] = server_counts.get(server, 0) + 1
+        all_tools: list[BaseTool] = []
 
-            for server, count in server_counts.items():
-                console.print(f"[dim]MCP: Connected ({count} tools)[/dim]")
+        # Load tools from each server with proper attribution
+        for server_name in servers:
+            try:
+                connection = config_dict.get(server_name)
+                if not connection:
+                    continue
 
-        except Exception as e:
-            console.print(f"[yellow]Warning: Failed to initialize MCP client: {e}[/yellow]")
+                # Load tools with server name prefix for proper attribution
+                server_tools = await load_mcp_tools(
+                    session=None,
+                    connection=connection,
+                    server_name=server_name,
+                    tool_name_prefix=False,  # Keep original names
+                )
+
+                if server_tools:
+                    all_tools.extend(server_tools)
+
+                    # Build metadata cache with correct server attribution
+                    for tool in server_tools:
+                        self._tools_cache.append({
+                            "name": tool.name,
+                            "description": tool.description or "",
+                            "server": server_name,
+                        })
+
+                    console.print(
+                        f"[dim]MCP: Connected to '{server_name}' "
+                        f"({len(server_tools)} tools)[/dim]"
+                    )
+
+            except Exception as e:
+                console.print(
+                    f"[yellow]Warning: Failed to connect to "
+                    f"MCP server '{server_name}': {e}[/yellow]"
+                )
+
+        # Store all tools for the agent
+        self.tools = all_tools
 
     async def on_session_start(
         self,

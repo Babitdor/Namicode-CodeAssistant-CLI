@@ -301,6 +301,12 @@ async def execute_task(
     tool_call_buffers: dict[str | int, dict] = {}
     # Buffer assistant text so we can render complete markdown segments
     pending_text = ""
+    # Flag to prevent duplicate responses when both streams print same content
+    # Set when updates stream shows a complete AI response
+    response_shown_via_updates = False
+    # Track when a subagent (task tool) is active - skip display in this case
+    # since invoke_subagent handles subagent output
+    subagent_active = False
 
     def flush_text_buffer(*, final: bool = False) -> None:
         """Flush accumulated assistant text as rendered markdown when appropriate."""
@@ -325,6 +331,9 @@ async def execute_task(
             interrupt_occurred = False
             hitl_response: dict[str, HITLResponse] = {}
             suppress_resumed_output = False
+            # Reset per-turn flags and tracking
+            response_shown_via_updates = False
+            displayed_tool_ids.clear()
             # Track all pending interrupts: {interrupt_id: request_data}
             pending_interrupts: dict[str, HITLRequest] = {}
 
@@ -386,8 +395,44 @@ async def execute_task(
                                 render_todo_list(new_todos)
                                 console.print()
 
+                        # Display AI response from model node (completed message)
+                        # Only show the AI's final response after tool execution is complete
+                        # Don't show tool call intentions or raw tool results
+                        # Skip if subagent is active - invoke_subagent handles subagent output
+                        if "messages" in chunk_data:
+                            messages = chunk_data["messages"]
+                            # Check if messages is a valid list (not a Rich Overwrite object)
+                            if isinstance(messages, list) and messages:
+                                last_msg = messages[-1]
+                                msg_type = getattr(last_msg, 'type', '')
+                                msg_text = getattr(last_msg, 'text', None) or getattr(last_msg, 'content', '')
+                                tool_calls = getattr(last_msg, 'tool_calls', [])
+                                # Skip tool calls, tool results, and AIMessages with tool_calls
+                                # Only show AI assistant messages without tool_calls (final responses)
+                                # Skip if subagent is active
+                                if msg_text and msg_type in ("ai", "assistant") and not tool_calls and not subagent_active:
+                                    # Clear any pending text from messages stream to avoid duplicate
+                                    pending_text = ""
+                                    # Skip if we already showed this response
+                                    if response_shown_via_updates:
+                                        continue
+                                    response_shown_via_updates = True
+                                    if spinner_active:
+                                        status.stop()
+                                        spinner_active = False
+                                    if not has_responded:
+                                        console.print("●", style=COLORS["agent"], markup=False, end=" ")
+                                        has_responded = True
+                                    console.print(Markdown(msg_text), style=COLORS["agent"])
+                                    console.print()
+
                 # Handle MESSAGES stream - for content and tool calls
                 elif current_stream_mode == "messages":
+                    # Only process messages from root namespace to avoid duplicates
+                    # With subgraphs=True, the same content can appear from multiple namespaces
+                    if _namespace != ():
+                        continue
+
                     # Messages stream returns (message, metadata) tuples
                     if not isinstance(data, tuple) or len(data) != 2:
                         continue
@@ -484,14 +529,16 @@ async def execute_task(
                     for block in message.content_blocks:
                         block_type = block.get("type")
 
-                        # Handle text blocks
+                        # Handle text blocks - skip if subagent is active or updates stream already showed
                         if block_type == "text":
                             text = block.get("text", "")
-                            if text:
+                            if text and not response_shown_via_updates and not subagent_active:
                                 pending_text += text
 
                         # Handle reasoning blocks
                         elif block_type == "reasoning":
+                            if subagent_active:
+                                continue
                             flush_text_buffer(final=True)
                             reasoning = block.get("reasoning", "")
                             if reasoning and spinner_active:
@@ -569,36 +616,48 @@ async def execute_task(
                                 parsed_args = {"value": parsed_args}
 
                             flush_text_buffer(final=True)
+                            display_needed = False
                             if buffer_id is not None:
                                 if buffer_id not in displayed_tool_ids:
                                     displayed_tool_ids.add(buffer_id)
                                     file_op_tracker.start_operation(
                                         buffer_name, parsed_args, buffer_id
                                     )
+                                    display_needed = True
                                 else:
                                     file_op_tracker.update_args(buffer_id, parsed_args)
+                            else:
+                                display_needed = True
                             tool_call_buffers.pop(buffer_key, None)
-                            icon = tool_icons.get(buffer_name, "🔧")
 
-                            if spinner_active:
-                                status.stop()
+                            if display_needed:
+                                # Skip display if this is a subagent task call
+                                # invoke_subagent handles subagent output
+                                if buffer_name == "task":
+                                    subagent_active = True
+                                    continue
 
-                            if has_responded:
-                                console.print()
+                                icon = tool_icons.get(buffer_name, "🔧")
 
-                            display_str = format_tool_display(buffer_name, parsed_args)
-                            console.print(
-                                f"  {icon} {display_str}",
-                                style=f"dim {COLORS['tool']}",
-                                markup=False,
-                            )
+                                if spinner_active:
+                                    status.stop()
 
-                            # Restart spinner with context about which tool is executing
-                            status.update(
-                                f"[bold {COLORS['thinking']}]Executing {display_str}..."
-                            )
-                            status.start()
-                            spinner_active = True
+                                if has_responded:
+                                    console.print()
+
+                                display_str = format_tool_display(buffer_name, parsed_args)
+                                console.print(
+                                    f"  {icon} {display_str}",
+                                    style=f"dim {COLORS['tool']}",
+                                    markup=False,
+                                )
+
+                                # Restart spinner with context about which tool is executing
+                                status.update(
+                                    f"[bold {COLORS['thinking']}]Executing {display_str}..."
+                                )
+                                status.start()
+                                spinner_active = True
 
                     if getattr(message, "chunk_position", None) == "last":
                         flush_text_buffer(final=True)

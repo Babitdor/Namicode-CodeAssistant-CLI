@@ -1925,51 +1925,14 @@ Guidelines:
             middleware=subagent_middleware,
         )
 
-        # Tool icons for UI display (same as main agent)
-        tool_icons = {
-            "read_file": "📖",
-            "write_file": "✏️",
-            "edit_file": "✂️",
-            "ls": "📁",
-            "glob": "🔍",
-            "grep": "🔎",
-            "shell": "⚡",
-            "execute": "🔧",
-            "web_search": "🌐",
-            "http_request": "🌍",
-            "fetch_url": "🔗",
-            "task": "🤖",
-            "write_todos": "📋",
-            "run_tests": "🧪",
-            "start_dev_server": "🚀",
-            "stop_server": "🛑",
-            "list_servers": "📊",
-        }
-
-        # Stream the subagent execution with UI observability
-        status = console.status(
-            f"[bold {COLORS['thinking']}]@{agent_name} is thinking...", spinner="dots"
-        )
-        status.start()
-        spinner_active = True
-
-        # Track displayed tool calls to avoid duplicates
-        displayed_tool_ids: set[str] = set()
-        tool_call_buffers: dict[str | int, dict] = {}
+        # Track pending text from subagent - all display is handled by outer execution
+        # The subagent's tool calls and responses appear in main execution's stream
         pending_text = ""
-        has_responded = False
-
-        # Initialize FileOpTracker for file operation tracking with diffs
-        file_op_tracker = FileOpTracker(
-            assistant_id=agent_name, backend=subagent_backend
-        )
-
-        # Track current todos for change detection
-        current_todos: list[dict] = []
 
         config = {"configurable": {"thread_id": f"subagent-{agent_name}"}}
 
-        # Try streaming first for UI observability
+        # Stream the subagent execution - content appears in main agent's stream
+        # We only accumulate the final response text here
         try:
             async for chunk in subagent.astream(
                 {"messages": [HumanMessage(content=query)]},
@@ -1977,221 +1940,50 @@ Guidelines:
                 subgraphs=True,
                 config=config,
             ):
-                # Handle different chunk formats
                 # With subgraphs=True and dual-mode, chunks are (namespace, stream_mode, data)
                 if isinstance(chunk, tuple) and len(chunk) == 3:
                     _namespace, current_stream_mode, data = chunk
 
-                    # Handle UPDATES stream - for todos and state changes
-                    if current_stream_mode == "updates":
-                        if isinstance(data, dict):
-                            # Check for todo updates
-                            if "todos" in data:
-                                new_todos = data["todos"]
-                                if new_todos != current_todos:
-                                    current_todos = new_todos
-                                    if spinner_active:
-                                        status.stop()
-                                        spinner_active = False
-                                    render_todo_list(new_todos)
-                                    if not spinner_active:
-                                        status.start()
-                                        spinner_active = True
-                            # Check nested agent state for todos
-                            for key, value in data.items():
-                                if isinstance(value, dict) and "todos" in value:
-                                    new_todos = value["todos"]
-                                    if new_todos != current_todos:
-                                        current_todos = new_todos
-                                        if spinner_active:
-                                            status.stop()
-                                            spinner_active = False
-                                        render_todo_list(new_todos)
-                                        if not spinner_active:
-                                            status.start()
-                                            spinner_active = True
+                    # Only process MESSAGES stream for text accumulation
+                    # Skip UPDATES stream - todos and progress shown by outer execution
+                    if current_stream_mode != "messages":
                         continue
 
-                    # Handle MESSAGES stream - for content and tool calls
-                    if current_stream_mode == "messages":
-                        # Messages stream returns (message, metadata) tuples
-                        if isinstance(data, tuple) and len(data) == 2:
-                            message, _metadata = data
+                    # Messages stream returns (message, metadata) tuples
+                    if not isinstance(data, tuple) or len(data) != 2:
+                        continue
 
-                            # Handle tool result messages
-                            if isinstance(message, ToolMessage):
-                                tool_name = getattr(message, "name", "")
-                                tool_status = getattr(message, "status", "success")
+                    message, _metadata = data
 
-                                # Complete file operation tracking and render diff
-                                record = file_op_tracker.complete_with_message(message)
-                                if record is not None:
-                                    if spinner_active:
-                                        status.stop()
-                                        spinner_active = False
-                                    render_file_operation(record)
-                                    if not spinner_active:
-                                        status.start()
-                                        spinner_active = True
+                    # Skip tool messages - their results appear in outer execution
+                    if hasattr(message, "name") and hasattr(message, "status"):
+                        if getattr(message, "status") == "ok":
+                            continue
 
-                                # Reset spinner message after tool completes
-                                if spinner_active:
-                                    status.update(
-                                        f"[bold {COLORS['thinking']}]@{agent_name} is thinking..."
-                                    )
+                    # Accumulate text content from AIMessage
+                    if hasattr(message, "content"):
+                        content = message.content
+                        if isinstance(content, str) and content:
+                            pending_text += content
+                        elif isinstance(content, list):
+                            for item in content:
+                                if isinstance(item, dict) and item.get("type") == "text":
+                                    text = item.get("text", "")
+                                    if text:
+                                        pending_text += text
+                                elif isinstance(item, str) and item:
+                                    pending_text += item
 
-                                # Show shell errors
-                                if tool_name == "shell" and tool_status != "success":
-                                    tool_content = message.content
-                                    if tool_content:
-                                        if spinner_active:
-                                            status.stop()
-                                            spinner_active = False
-                                        console.print()
-                                        console.print(
-                                            f"  [red]{tool_content}[/red]", markup=False
-                                        )
-                                        console.print()
-                                        if not spinner_active:
-                                            status.start()
-                                            spinner_active = True
-                                continue
-
-                            # Extract text content from message
-                            if hasattr(message, "content"):
-                                content = message.content
-                                if isinstance(content, str) and content:
-                                    pending_text += content
-                                elif isinstance(content, list):
-                                    for item in content:
-                                        if (
-                                            isinstance(item, dict)
-                                            and item.get("type") == "text"
-                                        ):
-                                            pending_text += item.get("text", "")
-                                        elif isinstance(item, str):
-                                            pending_text += item
-
-                            # Process content_blocks for tool calls
-                            if (
-                                hasattr(message, "content_blocks")
-                                and message.content_blocks
-                            ):
-                                for block in message.content_blocks:
-                                    block_type = block.get("type")
-
-                                    # Handle text blocks
-                                    if block_type == "text":
-                                        text = block.get("text", "")
-                                        if text and text not in pending_text:
-                                            pending_text += text
-
-                                    # Handle tool call chunks
-                                    elif block_type in ("tool_call_chunk", "tool_call"):
-                                        chunk_name = block.get("name")
-                                        chunk_args = block.get("args")
-                                        chunk_id = block.get("id")
-                                        chunk_index = block.get("index")
-
-                                        buffer_key: str | int
-                                        if chunk_index is not None:
-                                            buffer_key = chunk_index
-                                        elif chunk_id is not None:
-                                            buffer_key = chunk_id
-                                        else:
-                                            buffer_key = (
-                                                f"unknown-{len(tool_call_buffers)}"
-                                            )
-
-                                        buffer = tool_call_buffers.setdefault(
-                                            buffer_key,
-                                            {
-                                                "name": None,
-                                                "id": None,
-                                                "args": None,
-                                                "args_parts": [],
-                                            },
-                                        )
-
-                                        if chunk_name:
-                                            buffer["name"] = chunk_name
-                                        if chunk_id:
-                                            buffer["id"] = chunk_id
-
-                                        if isinstance(chunk_args, dict):
-                                            buffer["args"] = chunk_args
-                                            buffer["args_parts"] = []
-                                        elif isinstance(chunk_args, str) and chunk_args:
-                                            parts: list[str] = buffer.setdefault(
-                                                "args_parts", []
-                                            )
-                                            if not parts or chunk_args != parts[-1]:
-                                                parts.append(chunk_args)
-                                            buffer["args"] = "".join(parts)
-                                        elif chunk_args is not None:
-                                            buffer["args"] = chunk_args
-
-                                        buffer_name = buffer.get("name")
-                                        buffer_id = buffer.get("id")
-                                        if buffer_name is None:
-                                            continue
-
-                                        parsed_args = buffer.get("args")
-                                        if isinstance(parsed_args, str):
-                                            if not parsed_args:
-                                                continue
-                                            try:
-                                                parsed_args = json.loads(parsed_args)
-                                            except json.JSONDecodeError:
-                                                continue
-                                        elif parsed_args is None:
-                                            continue
-
-                                        if not isinstance(parsed_args, dict):
-                                            parsed_args = {"value": parsed_args}
-
-                                        # Display tool call (deduplicated)
-                                        if (
-                                            buffer_id is not None
-                                            and buffer_id not in displayed_tool_ids
-                                        ):
-                                            displayed_tool_ids.add(buffer_id)
-                                            tool_call_buffers.pop(buffer_key, None)
-                                            icon = tool_icons.get(buffer_name, "🔧")
-
-                                            # Start tracking file operations for diff display
-                                            file_op_tracker.start_operation(
-                                                buffer_name, parsed_args, buffer_id
-                                            )
-
-                                            if spinner_active:
-                                                status.stop()
-                                                spinner_active = False
-
-                                            display_str = format_tool_display(
-                                                buffer_name, parsed_args
-                                            )
-                                            console.print(
-                                                f"  {icon} {display_str}",
-                                                style=f"dim {COLORS['tool']}",
-                                                markup=False,
-                                            )
-
-                                            status.update(
-                                                f"[bold {COLORS['thinking']}]Executing {display_str}..."
-                                            )
-                                            status.start()
-                                            spinner_active = True
+                    # Also check content_blocks for text
+                    if hasattr(message, "content_blocks") and message.content_blocks:
+                        for block in message.content_blocks:
+                            if block.get("type") == "text":
+                                text = block.get("text", "")
+                                if text:
+                                    pending_text += text
 
         except Exception as stream_error:
-            # If streaming fails, fall back to ainvoke
-            if spinner_active:
-                status.stop()
-                spinner_active = False
-            console.print(
-                f"[dim]Streaming error: {stream_error}, using direct invoke[/dim]"
-            )
-
+            # Fall back to ainvoke on streaming error
             result = await subagent.ainvoke(
                 {"messages": [HumanMessage(content=query)]}, config=config
             )
@@ -2206,27 +1998,19 @@ Guidelines:
                 return str(final_message)
             return "No response from subagent."
 
-        # Stop spinner when done
-        if spinner_active:
-            status.stop()
-
-        # Render final text response as markdown if present
+        # Return accumulated text with display
         if pending_text:
             text = pending_text.strip()
             if text:
-                if not has_responded:
-                    console.print("●", style=COLORS["agent"], markup=False, end=" ")
-                    has_responded = True
+                console.print("●", style=COLORS["agent"], markup=False, end=" ")
                 try:
-                    markdown = Markdown(text)
-                    console.print(markdown, style=COLORS["agent"])
+                    from rich.markdown import Markdown
+                    console.print(Markdown(text), style=COLORS["agent"])
                 except Exception:
-                    # Fallback to plain text if markdown rendering fails
                     console.print(text, style=COLORS["agent"])
             return text
 
-        # If streaming didn't capture response, try ainvoke as fallback
-        console.print("[dim]No streaming response, trying direct invoke...[/dim]")
+        # Fallback to ainvoke if streaming did not capture response
         result = await subagent.ainvoke(
             {"messages": [HumanMessage(content=query)]}, config=config
         )
@@ -2241,7 +2025,6 @@ Guidelines:
             return str(final_message)
 
         return "No response from subagent."
-
     except ImportError as e:
         # Fallback to simple model invocation if deepagents is not fully available
         console.print(f"[dim]Subagent import error: {e}, using fallback[/dim]")

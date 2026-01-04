@@ -101,4 +101,5 @@ dmypy.json
 
 
 # NAMI CODE
+.nami/
 NAMI.md

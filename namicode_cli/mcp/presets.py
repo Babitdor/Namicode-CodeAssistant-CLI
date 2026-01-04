@@ -29,19 +29,12 @@ MCP_PRESETS: dict[str, dict[str, Any]] = {
     },
     "github": {
         "name": "GitHub MCP",
-        "description": "Interact with GitHub repositories, issues, and PRs (official)",
-        "package": "github-mcp-server",
+        "description": "Interact with GitHub repositories, issues, and PRs",
+        "package": "@modelcontextprotocol/server-github",
         "config": {
             "transport": "stdio",
-            "command": "docker",
-            "args": [
-                "run",
-                "-i",
-                "--rm",
-                "-e",
-                "GITHUB_PERSONAL_ACCESS_TOKEN",
-                "ghcr.io/github/github-mcp-server",
-            ],
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-github"],
             "env": {"GITHUB_PERSONAL_ACCESS_TOKEN": "{github_token}"},
         },
         "setup_prompt": "Enter your GitHub personal access token:",
@@ -196,17 +189,6 @@ MCP_PRESETS: dict[str, dict[str, Any]] = {
         },
         "setup_prompt": "Enter Stripe secret API key:",
         "setup_key": "stripe_key",
-    },
-    "sequential-thinking": {
-        "name": "Sequential Thinking MCP",
-        "description": "Dynamic and reflective problem-solving through thought sequences",
-        "package": "@modelcontextprotocol/server-sequential-thinking",
-        "config": {
-            "transport": "stdio",
-            "command": "npx",
-            "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"],
-            "env": {},
-        },
     },
     "everything": {
         "name": "Everything MCP",
