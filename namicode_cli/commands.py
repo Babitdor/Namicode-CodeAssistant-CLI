@@ -18,6 +18,8 @@ from .mcp import presets as mcp_presets
 from .model_manager import ModelManager, MODEL_PRESETS, get_ollama_models
 from .process_manager import ProcessManager
 from .dev_server import list_servers, stop_server
+from langgraph.store.memory import InMemoryStore
+from nami_deepagents.backends import CompositeBackend, StateBackend, StoreBackend
 from .test_runner import run_tests, detect_test_framework, get_default_test_command
 
 
@@ -1848,6 +1850,8 @@ async def invoke_subagent(
 
         model = create_model()
 
+        subagent_store = InMemoryStore()
+
         # Get the SAME tools that the main agent has access to
         # This includes HTTP tools, dev server tools, and test runner
         tools = [
@@ -1864,13 +1868,19 @@ async def invoke_subagent(
         # Create a backend for the subagent to get filesystem tools
         # Use the provided backend or create a local one
         if backend is None:
-            subagent_backend = CompositeBackend(
-                default=FilesystemBackend(),
-                routes={},
+            subagent_backend = lambda rt: CompositeBackend(
+                default=FilesystemBackend(root_dir=str(Path.cwd()), virtual_mode=True),
+                routes={
+                    "/memories/": StoreBackend(rt),
+                },
             )
         else:
-            subagent_backend = backend
-
+            subagent_backend = lambda rt: CompositeBackend(
+                default=backend,
+                routes={
+                    "/memories/": StoreBackend(rt),
+                },
+            )
         # Get skills directories for the subagent (same as main agent)
         # User-level skills: ~/.nami/skills/
         # Project-level skills: .nami/skills/ and .claude/skills/
@@ -1923,6 +1933,7 @@ Guidelines:
             tools=tools,
             backend=subagent_backend,
             middleware=subagent_middleware,
+            store=subagent_store,
         )
 
         # Stream the subagent execution following Streaming.md patterns

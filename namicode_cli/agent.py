@@ -28,9 +28,10 @@ import shutil
 from pathlib import Path
 
 from nami_deepagents import create_deep_agent
-from nami_deepagents.backends import CompositeBackend
+from nami_deepagents.backends import CompositeBackend, StateBackend, StoreBackend
 from nami_deepagents.backends.filesystem import FilesystemBackend
 from nami_deepagents.backends.sandbox import SandboxBackendProtocol
+from langgraph.store.memory import InMemoryStore
 from langchain.agents.middleware import (
     InterruptOnConfig,
 )
@@ -490,6 +491,9 @@ def create_agent_with_config(
     Returns:
         2-tuple of (graph, backend)
     """
+
+    # Setup MemoryStore for agent conversations
+    store = InMemoryStore()
     # Setup tracing if LangSmith is configured
     tracing_enabled = False
     if is_tracing_enabled():
@@ -543,9 +547,13 @@ def create_agent_with_config(
     if sandbox is None:
         # ========== LOCAL MODE ==========
         # Backend: Local filesystem for code (no virtual routes)
-        composite_backend = CompositeBackend(
-            default=FilesystemBackend(),  # Current working directory
-            routes={},  # No virtualization - use real paths
+        composite_backend = lambda rt: CompositeBackend(
+            default=FilesystemBackend(
+                root_dir=str(Path.cwd()), virtual_mode=False
+            ),  # Current working directory
+            routes={
+                "/memories/": StoreBackend(rt),
+            },  # No virtualization - use real paths
         )
 
         # Middleware: AgentMemoryMiddleware, SkillsMiddleware, MCPMiddleware, ShellToolMiddleware
@@ -565,9 +573,11 @@ def create_agent_with_config(
     else:
         # ========== REMOTE SANDBOX MODE ==========
         # Backend: Remote sandbox for code (no /memories/ route needed with filesystem-based memory)
-        composite_backend = CompositeBackend(
+        composite_backend = lambda rt: CompositeBackend(
             default=sandbox,  # Remote sandbox (ModalBackend, etc.)
-            routes={},  # No virtualization
+            routes={
+                "/memories/": StoreBackend(rt),
+            },  # No virtualization
         )
 
         # Middleware: AgentMemoryMiddleware, SkillsMiddleware, and MCPMiddleware
@@ -597,6 +607,7 @@ def create_agent_with_config(
         checkpointer=InMemorySaver(),
         backend=composite_backend,  # type: ignore
         middleware=agent_middleware,
+        store=store,
         interrupt_on=interrupt_on,  # type: ignore
     ).with_config(
         config  # type: ignore
