@@ -1880,12 +1880,8 @@ async def invoke_subagent(
             #     },
             # )
         else:
-            subagent_backend = lambda rt: CompositeBackend(
-                default=backend,
-                routes={
-                    "/memories/": StoreBackend(rt),
-                },
-            )
+            subagent_backend = backend
+
         # Get skills directories for the subagent (same as main agent)
         # User-level skills: ~/.nami/skills/
         # Project-level skills: .nami/skills/ and .claude/skills/
