@@ -1,4 +1,4 @@
-# Nami-Code CLI
+# Nami-Code : Agentic Coding Tool
 
 An open-source terminal-based AI coding assistant that runs in your terminal, similar to Claude Code. Built on top of the `deepagents` library which provides the core agent architecture.
 
