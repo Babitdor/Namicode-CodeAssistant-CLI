@@ -2746,14 +2746,11 @@ async def _handle_trace_command(cmd_args: list[str]) -> bool:
             else:
                 console.print(
                     Panel(
-                        Text(
-                            "⚠️  LangSmith tracing is [bold]NOT CONFIGURED[/bold]\n\n"
-                            "To enable tracing:\n"
-                            "1. Set LANGSMITH_API_KEY environment variable\n"
-                            "2. Set LANGSMITH_TRACING=true\n"
-                            f"3. Optionally set LANGSMITH_PROJECT for custom project name",
-                            style="dim",
-                        ),
+                        f"⚠️  LangSmith tracing is [bold]NOT CONFIGURED[/bold]\n\n"
+                        f"To enable tracing:\n"
+                        f"1. Set LANGSMITH_API_KEY environment variable\n"
+                        f"2. Set LANGSMITH_TRACING=true\n"
+                        f"3. Optionally set LANGSMITH_PROJECT for custom project name",
                         title=header,
                         border_style=COLORS["warning"],
                         padding=(1, 2),
