@@ -1868,12 +1868,17 @@ async def invoke_subagent(
         # Create a backend for the subagent to get filesystem tools
         # Use the provided backend or create a local one
         if backend is None:
-            subagent_backend = lambda rt: CompositeBackend(
-                default=FilesystemBackend(root_dir=str(Path.cwd()), virtual_mode=True),
-                routes={
-                    "/memories/": StoreBackend(rt),
-                },
+
+            subagent_backend = CompositeBackend(
+                default=FilesystemBackend(),  # Current working directory
+                routes={},  # No virtualization - use real paths
             )
+            # subagent_backend = lambda rt: CompositeBackend(
+            #     default=FilesystemBackend(root_dir=str(Path.cwd()), virtual_mode=True),
+            #     routes={
+            #         "/memories/": StoreBackend(rt),
+            #     },
+            # )
         else:
             subagent_backend = lambda rt: CompositeBackend(
                 default=backend,

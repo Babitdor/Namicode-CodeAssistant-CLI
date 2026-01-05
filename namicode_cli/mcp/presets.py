@@ -219,6 +219,17 @@ MCP_PRESETS: dict[str, dict[str, Any]] = {
             "env": {},
         },
     },
+    "netlify": {
+        "name": "Netlify MCP",
+        "description": "Deploy and manage Netlify sites and functions",
+        "package": "@netlify/mcp",
+        "config": {
+            "transport": "stdio",
+            "command": "npx",
+            "args": ["-y", "@netlify/mcp"],
+            "env": {},
+        },
+    },
 }
 
 

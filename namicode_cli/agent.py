@@ -547,14 +547,19 @@ def create_agent_with_config(
     if sandbox is None:
         # ========== LOCAL MODE ==========
         # Backend: Local filesystem for code (no virtual routes)
-        composite_backend = lambda rt: CompositeBackend(
-            default=FilesystemBackend(
-                root_dir=str(Path.cwd()), virtual_mode=False
-            ),  # Current working directory
-            routes={
-                "/memories/": StoreBackend(rt),
-            },  # No virtualization - use real paths
+
+        composite_backend = CompositeBackend(
+            default=FilesystemBackend(),  # Current working directory
+            routes={},  # No virtualization - use real paths
         )
+        # composite_backend = lambda rt: CompositeBackend(
+        #     default=FilesystemBackend(
+        #         root_dir=str(Path.cwd()), virtual_mode=False
+        #     ),  # Current working directory
+        #     routes={
+        #         "/memories/": StoreBackend(rt),
+        #     },  # No virtualization - use real paths
+        # )
 
         # Middleware: AgentMemoryMiddleware, SkillsMiddleware, MCPMiddleware, ShellToolMiddleware
         agent_middleware = [
