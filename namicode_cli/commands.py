@@ -33,12 +33,9 @@ from .model_manager import ModelManager, MODEL_PRESETS, get_ollama_models
 from .process_manager import ProcessManager
 
 from .dev_server import list_servers, stop_server
-from langgraph.store.memory import InMemoryStore
-from nami_deepagents.backends import CompositeBackend, StateBackend, StoreBackend
+from nami_deepagents.backends import CompositeBackend
 from .test_runner import run_tests, detect_test_framework, get_default_test_command
 from namicode_cli.subagent import create_subagent
-
-_HITL_REQUEST_ADAPTER = TypeAdapter(HITLRequest)
 
 
 async def _handle_init_command(

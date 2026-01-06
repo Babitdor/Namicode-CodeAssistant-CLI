@@ -43,7 +43,6 @@ from pydantic import TypeAdapter, ValidationError
 from rich import box
 from rich.markdown import Markdown
 from rich.panel import Panel
-
 from namicode_cli.config import COLORS, console
 from namicode_cli.errors import ErrorHandler
 from namicode_cli.file_ops import FileOpTracker, build_approval_preview
@@ -263,7 +262,10 @@ async def execute_task(
         "configurable": {"thread_id": session_state.thread_id},
         "metadata": {"assistant_id": assistant_id} if assistant_id else {},
     }
-
+    agent_display_name = assistant_id if assistant_id and is_subagent else "Nami"
+    agent_colors = (
+        COLORS["subagent"] if assistant_id and is_subagent else COLORS["agent"]
+    )
     # Track user message for /context command
     if token_tracker:
         token_tracker.increment_user_messages()
@@ -273,15 +275,10 @@ async def execute_task(
     captured_output_tokens = 0
     current_todos = None  # Track current todo list state
 
-    if is_subagent:
-        status = console.status(
-            f"[bold {COLORS['subagent']}]{assistant_id} is thinking...", spinner="dots"
-        )
-    else:
-        status = console.status(
-            f"[bold {COLORS['thinking']}]Nami is thinking...",
-            spinner="dots",
-        )
+    status = console.status(
+        f"[bold {agent_colors}]{agent_display_name} is thinking...",
+        spinner="dots",
+    )
     status.start()
     spinner_active = True
 
@@ -323,10 +320,12 @@ async def execute_task(
             status.stop()
             spinner_active = False
         if not has_responded:
-            console.print("●", style=COLORS["agent"], markup=False, end=" ")
+            console.print()
+            console.print("●", style=agent_colors, markup=False, end=" ")
             has_responded = True
         markdown = Markdown(pending_text.rstrip())
-        console.print(markdown, style=COLORS["agent"])
+        console.print(agent_display_name, style=agent_colors)
+        console.print(markdown, justify="full")
         pending_text = ""
 
     # Stream input - may need to loop if there are interrupts
@@ -433,17 +432,20 @@ async def execute_task(
                                         status.stop()
                                         spinner_active = False
                                     if not has_responded:
+                                        console.print()
                                         console.print(
                                             "●",
-                                            style=COLORS["agent"],
+                                            style=agent_colors,
                                             markup=False,
                                             end=" ",
                                         )
                                         has_responded = True
+
                                     console.print(
-                                        Markdown(msg_text), style=COLORS["agent"]
+                                        agent_display_name,
+                                        style=agent_colors,
                                     )
-                                    console.print()
+                                    console.print(Markdown(msg_text), justify="full")
 
                 # Handle MESSAGES stream - for content and tool calls
                 elif current_stream_mode == "messages":
@@ -466,13 +468,15 @@ async def execute_task(
                                 status.stop()
                                 spinner_active = False
                             if not has_responded:
+                                console.print()
                                 console.print(
-                                    "●", style=COLORS["agent"], markup=False, end=" "
+                                    "●", style=agent_colors, markup=False, end=" "
                                 )
                                 has_responded = True
                             markdown = Markdown(content)
-                            console.print(markdown, style=COLORS["agent"])
-                            console.print()
+                            console.print(agent_display_name, style=agent_colors)
+                            console.print(markdown, justify="full")
+
                         continue
 
                     if isinstance(message, ToolMessage):
@@ -486,7 +490,7 @@ async def execute_task(
                         # Reset spinner message after tool completes
                         if spinner_active:
                             status.update(
-                                f"[bold {COLORS['thinking']}]Nami is thinking..."
+                                f"[bold {COLORS['thinking']}]{agent_display_name} is thinking..."
                             )
 
                         if tool_name == "shell" and tool_status != "success":
@@ -668,7 +672,7 @@ async def execute_task(
 
                                 # Restart spinner with context about which tool is executing
                                 status.update(
-                                    f"[bold {COLORS['thinking']}]Executing {display_str}..."
+                                    f"[bold {COLORS['thinking']}]{agent_display_name} is executing {display_str}..."
                                 )
                                 status.start()
                                 spinner_active = True

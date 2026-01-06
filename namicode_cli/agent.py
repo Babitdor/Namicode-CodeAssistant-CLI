@@ -64,10 +64,13 @@ from namicode_cli.tracing import (
 
 
 def list_agents() -> None:
-    """List all available agents."""
-    agents_dir = settings.get_agents_root_dir()
+    """List all available agents with detailed information."""
+    agents = settings.get_all_agents()
 
-    if not agents_dir.exists() or not any(agents_dir.iterdir()):
+    if not agents:
+        console.print(
+            f"\n[bold {COLORS['primary']}]📋 Available Agents[/bold {COLORS['primary']}]\n"
+        )
         console.print("[yellow]No agents found.[/yellow]")
         console.print(
             "[dim]Agents will be created in ~/.nami/agents/ when you first use them.[/dim]",
@@ -75,23 +78,49 @@ def list_agents() -> None:
         )
         return
 
-    console.print("\n[bold]Available Agents:[/bold]\n", style=COLORS["primary"])
+    console.print(
+        f"\n[bold {COLORS['primary']}]📋 Available Agents[/bold {COLORS['primary']}]\n"
+    )
 
-    for agent_path in sorted(agents_dir.iterdir()):
-        if agent_path.is_dir():
-            agent_name = agent_path.name
-            agent_md = agent_path / "agent.md"
+    for agent_name, agent_path, scope in sorted(agents, key=lambda x: (x[2], x[0])):
+        # Display scope badge
+        scope_badge = "🌐" if scope == "global" else "📁"
+        scope_color = COLORS["accent"] if scope == "global" else COLORS["success"]
 
-            if agent_md.exists():
-                console.print(f"  • [bold]{agent_name}[/bold]", style=COLORS["primary"])
-                console.print(f"    {agent_path}", style=COLORS["dim"])
-            else:
-                console.print(
-                    f"  • [bold]{agent_name}[/bold] [dim](incomplete)[/dim]",
-                    style=COLORS["tool"],
-                )
-                console.print(f"    {agent_path}", style=COLORS["dim"])
+        # Agent name with icon and scope
+        console.print(
+            f"  {scope_badge} [bold {COLORS['primary']}]{agent_name}[/bold {COLORS['primary']}] "
+            f"[dim]([{scope_color}]{scope}[/{scope_color}])[/dim]"
+        )
 
+        # Agent path
+        relative_path = (
+            agent_path.relative_to(Path.home())
+            if agent_path.is_relative_to(Path.home())
+            else agent_path
+        )
+        console.print(f"    [dim]Path: ~/{relative_path}[/dim]")
+
+        # Check for agent.md existence and show summary
+        agent_md = agent_path / "agent.md"
+        if agent_md.exists():
+            content = agent_md.read_text()
+            # Extract first line or first sentence as description
+            lines = content.strip().split("\n")
+            desc = ""
+            for line in lines[:3]:  # Check first 3 lines
+                line = line.strip()
+                if line and not line.startswith("#") and len(line) > 20:
+                    desc = line[:80] + "..." if len(line) > 80 else line
+                    break
+            if desc:
+                console.print(f"    [dim]{desc}[/dim]")
+        else:
+            console.print(f"    [yellow]⚠️  (incomplete - no agent.md)[/yellow]")
+
+        console.print()
+
+    console.print(f"[dim]Total: {len(agents)} agent(s)[/dim]")
     console.print()
 
 
