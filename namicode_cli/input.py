@@ -60,7 +60,9 @@ class FilePathCompleter(Completer):
         unescaped_fragment = unescaped_fragment.removesuffix("\\")
 
         # Create temporary document for the unescaped path fragment
-        temp_doc = Document(text=unescaped_fragment, cursor_position=len(unescaped_fragment))
+        temp_doc = Document(
+            text=unescaped_fragment, cursor_position=len(unescaped_fragment)
+        )
 
         # Get completions from PathCompleter and use its start_position
         # PathCompleter returns suffix text with start_position=0 (insert at cursor)
@@ -83,7 +85,7 @@ class FilePathCompleter(Completer):
 class CommandCompleter(Completer):
     """Activate command completion only when line starts with '/'."""
 
-    def get_completions(self, document, _complete_event): # type: ignore
+    def get_completions(self, document, _complete_event):  # type: ignore
         """Get command completions when / is at the start."""
         text = document.text_before_cursor
 
@@ -99,7 +101,9 @@ class CommandCompleter(Completer):
             if cmd_name.startswith(command_fragment.lower()):
                 yield Completion(
                     text=cmd_name,
-                    start_position=-len(command_fragment),  # Fixed position for original document
+                    start_position=-len(
+                        command_fragment
+                    ),  # Fixed position for original document
                     display=cmd_name,
                     display_meta=cmd_desc,
                 )
@@ -108,7 +112,7 @@ class CommandCompleter(Completer):
 class AgentCompleter(Completer):
     """Provide completion for @agent mentions at the start of input."""
 
-    def get_completions(self, document, _complete_event): # type: ignore
+    def get_completions(self, document, _complete_event):  # type: ignore
         """Get agent completions when @ is at the start of input.
 
         Shows agents from both project scope (if in a project) and global scope.
@@ -193,7 +197,9 @@ def parse_file_mentions(text: str) -> tuple[str, list[Path]]:
     return text, files
 
 
-def parse_agent_mentions(text: str, settings: Settings | None = None) -> tuple[str | None, str]:
+def parse_agent_mentions(
+    text: str, settings: Settings | None = None
+) -> tuple[str | None, str]:
     """Parse @agent_name mentions at the start of input.
 
     Returns:
@@ -265,7 +271,7 @@ def get_bottom_toolbar(
     return toolbar
 
 
-def create_prompt_session(_assistant_id: str, session_state: SessionState) -> PromptSession:
+def create_prompt_session(_assistant_id, session_state: SessionState) -> PromptSession:
     """Create a configured PromptSession with all features."""
     # Set default editor if not already set
     if "EDITOR" not in os.environ:
@@ -280,7 +286,10 @@ def create_prompt_session(_assistant_id: str, session_state: SessionState) -> Pr
         app = event.app
         now = time.monotonic()
 
-        if session_state.exit_hint_until is not None and now < session_state.exit_hint_until:
+        if (
+            session_state.exit_hint_until is not None
+            and now < session_state.exit_hint_until
+        ):
             handle = session_state.exit_hint_handle
             if handle:
                 handle.cancel()
@@ -308,7 +317,7 @@ def create_prompt_session(_assistant_id: str, session_state: SessionState) -> Pr
                 session_state.exit_hint_handle = None
                 app_ref.invalidate()
 
-        session_state.exit_hint_handle = loop.call_later(EXIT_CONFIRM_WINDOW, clear_hint) # type: ignore
+        session_state.exit_hint_handle = loop.call_later(EXIT_CONFIRM_WINDOW, clear_hint)  # type: ignore
 
         app.invalidate()
 
@@ -393,7 +402,10 @@ def create_prompt_session(_assistant_id: str, session_state: SessionState) -> Pr
 
     # Force VT100 output on Windows when running in MINGW/Git Bash or similar Unix-like terminals
     output = None
-    if sys.platform == "win32" and os.environ.get("TERM") in ("xterm-256color", "xterm"):
+    if sys.platform == "win32" and os.environ.get("TERM") in (
+        "xterm-256color",
+        "xterm",
+    ):
         output = Vt100_Output.from_pty(sys.stdout)
 
     # Create the session
@@ -402,7 +414,9 @@ def create_prompt_session(_assistant_id: str, session_state: SessionState) -> Pr
         message=HTML(f'<style fg="{COLORS["user"]}">></style> '),
         multiline=True,  # Keep multiline support but Enter submits
         key_bindings=kb,
-        completer=merge_completers([CommandCompleter(), AgentCompleter(), FilePathCompleter()]),
+        completer=merge_completers(
+            [CommandCompleter(), AgentCompleter(), FilePathCompleter()]
+        ),
         editing_mode=EditingMode.EMACS,
         complete_while_typing=True,  # Show completions as you type
         complete_in_thread=True,  # Async completion prevents menu freezing

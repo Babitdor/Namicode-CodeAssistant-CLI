@@ -542,7 +542,7 @@ async def simple_cli(
                 agent,
                 token_tracker,
                 session_state,
-                assistant_id,
+                assistant_id,  # type: ignore
                 session_manager=session_manager,
                 model_name=model_name,
             )
