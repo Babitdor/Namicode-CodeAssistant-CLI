@@ -26,6 +26,7 @@ The agent is built using LangGraph's Pregel architecture with:
 import os
 import shutil
 from pathlib import Path
+from typing import Generator
 
 from nami_deepagents import create_deep_agent
 from nami_deepagents.backends import CompositeBackend, StateBackend, StoreBackend
@@ -61,6 +62,31 @@ from namicode_cli.tracing import (
     get_tracing_config,
     wrap_openai_client,
 )
+
+
+# Module-level shared store for agent/subagent memory sharing
+_shared_store: InMemoryStore | None = None
+_store_lock_initialized = False
+
+
+def get_shared_store() -> InMemoryStore:
+    """Get or create the shared InMemoryStore for agent/subagent communication.
+
+    Returns:
+        Shared InMemoryStore instance
+    """
+    global _shared_store, _store_lock_initialized
+    if _shared_store is None:
+        _shared_store = InMemoryStore()
+        _store_lock_initialized = True
+    return _shared_store
+
+
+def reset_shared_store() -> None:
+    """Reset the shared store (useful for new sessions)."""
+    global _shared_store, _store_lock_initialized
+    _shared_store = None
+    _store_lock_initialized = False
 
 
 def list_agents() -> None:
@@ -506,6 +532,8 @@ def create_agent_with_config(
     *,
     sandbox: SandboxBackendProtocol | None = None,
     sandbox_type: str | None = None,
+    store: InMemoryStore | None = None,
+    checkpointer: InMemorySaver | None = None,
 ) -> tuple[Pregel, CompositeBackend]:
     """Create and configure an agent with the specified model and tools.
 
@@ -516,14 +544,12 @@ def create_agent_with_config(
         sandbox: Optional sandbox backend for remote execution (e.g., ModalBackend).
                  If None, uses local filesystem + shell.
         sandbox_type: Type of sandbox provider ("modal", "runloop", "daytona")
+        store: Optional InMemoryStore. If None and use_shared_store is True,
+               uses a module-level shared store that subagents can also access.
 
     Returns:
         2-tuple of (graph, backend)
     """
-
-    # Setup MemoryStore for agent conversations
-    store = InMemoryStore()
-    # Setup tracing if LangSmith is configured
     tracing_enabled = False
     if is_tracing_enabled():
         tracing_enabled = True
@@ -638,7 +664,7 @@ def create_agent_with_config(
         model=wrapped_model,
         system_prompt=system_prompt,
         tools=tools,
-        checkpointer=InMemorySaver(),
+        checkpointer=checkpointer,
         backend=composite_backend,  # type: ignore
         middleware=agent_middleware,
         store=store,
@@ -647,4 +673,4 @@ def create_agent_with_config(
         config  # type: ignore
     )
 
-    return agent, composite_backend # type: ignore
+    return agent, composite_backend  # type: ignore

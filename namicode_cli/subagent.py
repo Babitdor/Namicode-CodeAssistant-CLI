@@ -17,7 +17,7 @@ from namicode_cli.config import (
     config,
     console,
 )
-from namicode_cli.agent import _add_interrupt_on
+from namicode_cli.agent import _add_interrupt_on, get_shared_store
 from namicode_cli.shell import ShellMiddleware
 from namicode_cli.skills import SkillsMiddleware
 from namicode_cli.mcp import MCPMiddleware
@@ -35,6 +35,8 @@ def create_subagent(
     backend: CompositeBackend | None = None,
     *,
     settings: Settings,
+    checkpointer: InMemorySaver | None = None,
+    store: InMemoryStore | None = None,
 ) -> tuple[Pregel, CompositeBackend]:
     """Create and configure an agent with the specified model and tools.
 
@@ -44,6 +46,10 @@ def create_subagent(
         tools: Additional tools to provide to agent
         backend: Optional composite backend for execution
         settings: Settings object for configuration
+        store: Optional InMemoryStore. If None and use_shared_store is True,
+               uses the module-level shared store from agent.py.
+        use_shared_store: If True and store is None, use the shared store.
+               Set to False to create an isolated store.
 
     Returns:
         2-tuple of (graph, backend)
@@ -60,9 +66,6 @@ def create_subagent(
         system_prompt = agent_md_path.read_text(encoding="utf-8")
     except Exception as e:
         return f"Error reading agent configuration: {e}"  # type: ignore
-
-    # Setup MemoryStore for agent conversations
-    subagent_store = InMemoryStore()
 
     # Setup tracing if LangSmith is configured
     tracing_enabled = False
@@ -159,10 +162,10 @@ Guidelines:
         model=wrapped_model,
         system_prompt=enhanced_prompt,
         tools=tools,
-        checkpointer=InMemorySaver(),
+        checkpointer=checkpointer,
         backend=subagent_backend,  # type: ignore
         middleware=subagent_middleware,
-        store=subagent_store,
+        store=store,
         interrupt_on=interrupt_on,  # type: ignore
     ).with_config(
         config  # type: ignore

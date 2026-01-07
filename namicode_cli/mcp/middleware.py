@@ -207,10 +207,10 @@ class MCPMiddleware(AgentMiddleware):
                             }
                         )
 
-                    # console.print(
-                    #     f"[dim]MCP: Connected to '{server_name}' "
-                    #     f"({len(server_tools)} tools)[/dim]"
-                    # )
+                    console.print(
+                        f"[dim]MCP: Connected to '{server_name}' "
+                        f"({len(server_tools)} tools)[/dim]"
+                    )
 
             except Exception as e:
                 console.print(

@@ -14,6 +14,7 @@ from langchain.agents.middleware.human_in_the_loop import (
     HITLResponse,
     RejectDecision,
 )
+from langgraph.store.memory import InMemoryStore
 from langgraph.pregel import Pregel
 from rich.panel import Panel
 from rich.table import Table
@@ -1791,7 +1792,11 @@ async def _agents_delete_interactive(ps, settings) -> bool:
 
 
 def invoke_subagent(
-    agent_name: str, settings: Settings, backend=None
+    agent_name: str,
+    settings: Settings,
+    backend=None,
+    store: InMemoryStore | None = None,
+    checkpointer: InMemorySaver | None = None
 ) -> tuple[Pregel, CompositeBackend]:
     """Invoke a custom agent as an isolated subagent using the deepagents SubAgent pattern.
 
@@ -1839,8 +1844,10 @@ def invoke_subagent(
         agent_name=agent_name,
         tools=tools,
         model=create_model(),
+        checkpointer=checkpointer,
         settings=settings,
         backend=backend,
+        store=store,
     )
 
     return subagent, subagent_backend
@@ -2313,7 +2320,7 @@ async def handle_command(
     if cmd == "trace":
         # Manage LangSmith tracing
         try:
-            return await _handle_trace_command(cmd_args) # type: ignore
+            return await _handle_trace_command(cmd_args)  # type: ignore
         except Exception as e:
             console.print(f"[red]Error running /trace command: {e}[/red]")
             import traceback
@@ -2414,7 +2421,7 @@ async def _handle_trace_command(cmd_args: list[str]) -> bool:
 
         config = configure_tracing(
             api_key=api_key,
-            project_name=project_name, # type: ignore
+            project_name=project_name,  # type: ignore
             enable=True,
         )
 

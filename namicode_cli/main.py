@@ -46,7 +46,8 @@ import signal
 import sys
 import time
 from pathlib import Path
-
+from langgraph.store.memory import InMemoryStore
+from langgraph.checkpoint.memory import InMemorySaver
 from nami_deepagents.backends.protocol import SandboxBackendProtocol
 
 from namicode_cli.agent import create_agent_with_config, list_agents, reset_agent
@@ -279,6 +280,8 @@ async def simple_cli(
     no_splash: bool = False,
     model_name: str | None = None,
     session_manager=None,
+    store: InMemoryStore | None = None,
+    checkpointer: InMemorySaver | None = None,
 ) -> None:
     """Main CLI loop.
 
@@ -575,7 +578,11 @@ async def simple_cli(
             # console.print()
 
             subagent, _ = invoke_subagent(
-                agent_name, settings=settings, backend=backend
+                agent_name,
+                settings=settings,
+                backend=backend,
+                store=store,
+                checkpointer=checkpointer,
             )
             await execute_task(
                 query,
@@ -612,6 +619,8 @@ async def _run_agent_session(
     setup_script_path: str | None = None,
     initial_messages: list | None = None,
     session_manager=None,
+    store: InMemoryStore | None = None,
+    checkpointer: InMemorySaver | None = None,
 ) -> None:
     """Helper to create agent and run CLI session.
 
@@ -640,7 +649,13 @@ async def _run_agent_session(
         tools.append(web_search)
 
     agent, composite_backend = create_agent_with_config(
-        model, assistant_id, tools, sandbox=sandbox_backend, sandbox_type=sandbox_type
+        model,
+        assistant_id,
+        tools,
+        sandbox=sandbox_backend,
+        sandbox_type=sandbox_type,
+        store=store,
+        checkpointer=checkpointer,
     )
 
     # Inject initial messages if continuing a session
@@ -682,6 +697,8 @@ async def _run_agent_session(
         no_splash=session_state.no_splash,
         model_name=model_name,
         session_manager=session_manager,
+        store=store,
+        checkpointer=checkpointer,
     )
 
 
@@ -707,7 +724,8 @@ async def main(
     from .session_restore import restore_session
 
     model = create_model()
-
+    store = InMemoryStore()
+    checkpointer = InMemorySaver()
     # Initialize session manager for persistence
     session_manager = SessionManager()
     initial_messages: list | None = None
@@ -775,6 +793,8 @@ async def main(
                     setup_script_path=setup_script_path,
                     initial_messages=initial_messages,
                     session_manager=session_manager,
+                    store=store,
+                    checkpointer=checkpointer,
                 )
         except (ImportError, ValueError, RuntimeError, NotImplementedError) as e:
             # Sandbox creation failed - fail hard (no silent fallback)
@@ -800,6 +820,8 @@ async def main(
                 sandbox_backend=None,
                 initial_messages=initial_messages,
                 session_manager=session_manager,
+                store=store,
+                checkpointer=checkpointer,
             )
         except KeyboardInterrupt:
             console.print("\n\n[yellow]Interrupted[/yellow]")
