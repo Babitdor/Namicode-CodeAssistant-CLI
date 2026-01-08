@@ -15,6 +15,8 @@ An open-source terminal-based AI coding assistant that runs in your terminal, si
 - **Project-Aware**: Automatically detects project roots and loads project-specific configurations
 - **MCP Support**: Extend capabilities with Model Context Protocol servers
 - **Sandbox Execution**: Run code safely in remote sandboxes (Modal, Runloop, Daytona, Docker)
+- **Terminal-Bench Evaluation**: Built-in Harbor evaluation framework for benchmark testing
+- **Security-First**: Automatic .gitignore enforcement to protect sensitive files
 
 ## Installation
 
@@ -216,6 +218,23 @@ The CLI implements a "Deep Agent" architecture with four key components:
 - `skills/` - Skills system implementation
 - `mcp/` - Model Context Protocol integration
 - `integrations/` - Sandbox providers (Modal, Runloop, Daytona, Docker)
+- `evaluation/` - Harbor evaluation framework for Terminal-Bench benchmarking
+- `shared_memory.py` - Cross-agent memory sharing with attribution
+
+### Evaluation Framework
+
+The CLI includes a built-in evaluation framework for benchmarking agent performance:
+
+```bash
+# Run Terminal-Bench evaluations
+cd evaluation
+make evaluate
+
+# Analyze results
+make analyze
+```
+
+See [EVALUATION.md](docs/EVALUATION.md) for detailed setup and usage instructions.
 
 ## Dependencies
 
