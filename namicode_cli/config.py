@@ -127,7 +127,7 @@ def parse_agent_color(agent_md_path: Path) -> str | None:
 
 
 # ASCII art banner - Sleek red design
-DEEP_AGENTS_ASCII = """
+NAMI_CODE_ASCII = """
                                                                      
        ███╗   ██╗ █████╗ ███╗   ███╗██╗     ██████╗ ██████╗ ██████╗ ███████╗   
        ████╗  ██║██╔══██╗████╗ ████║██║    ██╔════╝██╔═══██╗██╔══██╗██╔════╝   

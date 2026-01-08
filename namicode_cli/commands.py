@@ -21,7 +21,7 @@ from rich.table import Table
 from rich.text import Text
 from pydantic import TypeAdapter, ValidationError
 
-from .config import COLORS, DEEP_AGENTS_ASCII, Settings, TOOL_ICONS, console
+from .config import COLORS, NAMI_CODE_ASCII, Settings, TOOL_ICONS, console
 from .execution import execute_task
 from .ui import (
     TokenTracker,
@@ -1573,18 +1573,24 @@ async def _agents_create_interactive(ps, settings) -> bool:
     console.print(
         "[dim]They have full access to: file operations, shell commands, web search,[/dim]"
     )
-    console.print(
-        "[dim]dev servers, test runners, and shared memory.[/dim]"
-    )
+    console.print("[dim]dev servers, test runners, and shared memory.[/dim]")
     console.print()
     console.print("[bold]Example agent types:[/bold]")
-    console.print("  • [cyan]code-reviewer[/cyan] - Reviews code for quality, security, best practices")
+    console.print(
+        "  • [cyan]code-reviewer[/cyan] - Reviews code for quality, security, best practices"
+    )
     console.print("  • [cyan]debugger[/cyan] - Diagnoses and fixes bugs systematically")
-    console.print("  • [cyan]architect[/cyan] - Designs system architecture and patterns")
+    console.print(
+        "  • [cyan]architect[/cyan] - Designs system architecture and patterns"
+    )
     console.print("  • [cyan]test-writer[/cyan] - Creates comprehensive test suites")
-    console.print("  • [cyan]refactor-assistant[/cyan] - Improves code structure and readability")
+    console.print(
+        "  • [cyan]refactor-assistant[/cyan] - Improves code structure and readability"
+    )
     console.print("  • [cyan]api-designer[/cyan] - Designs RESTful/GraphQL APIs")
-    console.print("  • [cyan]security-auditor[/cyan] - Identifies security vulnerabilities")
+    console.print(
+        "  • [cyan]security-auditor[/cyan] - Identifies security vulnerabilities"
+    )
     console.print("  • [cyan]performance-optimizer[/cyan] - Optimizes code performance")
     console.print()
 
@@ -1668,11 +1674,19 @@ async def _agents_create_interactive(ps, settings) -> bool:
     # Get description
     console.print()
     console.print("[bold]Describe what this agent specializes in:[/bold]")
-    console.print("[dim]Be specific about the agent's focus area, expertise, and typical tasks.[/dim]")
+    console.print(
+        "[dim]Be specific about the agent's focus area, expertise, and typical tasks.[/dim]"
+    )
     console.print("[dim]Good examples:[/dim]")
-    console.print("[dim]  • 'Reviews Python code for security vulnerabilities, OWASP top 10, and secure coding practices'[/dim]")
-    console.print("[dim]  • 'Creates and maintains React component tests using Jest and React Testing Library'[/dim]")
-    console.print("[dim]  • 'Optimizes SQL queries and database schemas for PostgreSQL performance'[/dim]")
+    console.print(
+        "[dim]  • 'Reviews Python code for security vulnerabilities, OWASP top 10, and secure coding practices'[/dim]"
+    )
+    console.print(
+        "[dim]  • 'Creates and maintains React component tests using Jest and React Testing Library'[/dim]"
+    )
+    console.print(
+        "[dim]  • 'Optimizes SQL queries and database schemas for PostgreSQL performance'[/dim]"
+    )
     console.print()
     description = (await ps.prompt_async("Description: ")).strip()
 
@@ -1720,7 +1734,9 @@ async def _agents_create_interactive(ps, settings) -> bool:
 
     # Generate system prompt using LLM
     console.print()
-    console.print("[dim]Generating comprehensive system prompt with tool guidelines...[/dim]")
+    console.print(
+        "[dim]Generating comprehensive system prompt with tool guidelines...[/dim]"
+    )
 
     system_prompt = await _generate_agent_system_prompt(agent_name, description)
 
@@ -1740,7 +1756,9 @@ async def _agents_create_interactive(ps, settings) -> bool:
     console.print()
 
     # Ask for confirmation
-    confirm = (await ps.prompt_async("Create this agent? (y/n, default=y): ")).strip().lower() or "y"
+    confirm = (
+        await ps.prompt_async("Create this agent? (y/n, default=y): ")
+    ).strip().lower() or "y"
     if confirm not in ("y", "yes"):
         console.print("[yellow]Cancelled - agent not created[/yellow]")
         console.print()
@@ -1765,8 +1783,12 @@ color: {agent_color}
     console.print(f"[dim]Location: {agent_dir}[/dim]")
     console.print()
     console.print("[bold]How to use:[/bold]")
-    console.print(f"  • Type [cyan]@{agent_name} <your query>[/cyan] to invoke this agent")
-    console.print(f"  • Run [cyan]nami --agent {agent_name}[/cyan] to start with this agent")
+    console.print(
+        f"  • Type [cyan]@{agent_name} <your query>[/cyan] to invoke this agent"
+    )
+    console.print(
+        f"  • Run [cyan]nami --agent {agent_name}[/cyan] to start with this agent"
+    )
     console.print(f"  • Edit [cyan]{agent_md}[/cyan] to customize the prompt")
     console.print()
     return True
@@ -1879,7 +1901,7 @@ def invoke_subagent(
     settings: Settings,
     backend=None,
     store: InMemoryStore | None = None,
-    checkpointer: InMemorySaver | None = None
+    checkpointer: InMemorySaver | None = None,
 ) -> tuple[Pregel, CompositeBackend]:
     """Invoke a custom agent as an isolated subagent using the deepagents SubAgent pattern.
 
@@ -1967,7 +1989,7 @@ async def _generate_agent_system_prompt(
         model = create_model()
 
         # Comprehensive generation prompt with tool reference and examples
-        generation_prompt = f'''Generate a comprehensive system prompt for an AI coding assistant agent named "{agent_name}".
+        generation_prompt = f"""Generate a comprehensive system prompt for an AI coding assistant agent named "{agent_name}".
 
 Agent Description: {description}
 
@@ -2056,7 +2078,7 @@ Agent approach: [step-by-step how agent handles it]
 - Be specific and actionable, not generic
 - Include code examples where relevant to the agent's specialty
 
-Generate the system prompt now:'''
+Generate the system prompt now:"""
 
         response = await model.ainvoke(generation_prompt)
 
@@ -2313,7 +2335,7 @@ async def handle_command(
 
         # Clear screen and show fresh UI
         console.clear()
-        console.print(DEEP_AGENTS_ASCII, style=f"bold {COLORS['primary']}")
+        console.print(NAMI_CODE_ASCII, style=f"bold {COLORS['primary']}")
         console.print()
         console.print(
             "... Fresh start! Screen cleared and conversation reset.",
@@ -2538,7 +2560,9 @@ async def _handle_files_command() -> bool:
     console.print(f"  • Total read operations: [dim]{tracker.total_reads}[/dim]")
     console.print(f"  • Total write operations: [dim]{tracker.total_writes}[/dim]")
     if tracker.rejected_edits > 0:
-        console.print(f"  • [red]Rejected edits (unread files): {tracker.rejected_edits}[/red]")
+        console.print(
+            f"  • [red]Rejected edits (unread files): {tracker.rejected_edits}[/red]"
+        )
     console.print()
 
     # Files read
@@ -2555,12 +2579,18 @@ async def _handle_files_command() -> bool:
             display_path = path
             if len(display_path) > 60:
                 display_path = "..." + display_path[-57:]
-            time_str = record.read_at.split("T")[1][:8] if "T" in record.read_at else record.read_at
+            time_str = (
+                record.read_at.split("T")[1][:8]
+                if "T" in record.read_at
+                else record.read_at
+            )
             table.add_row(display_path, str(record.line_count), time_str)
 
         console.print(table)
         if len(tracker.read_order) > 15:
-            console.print(f"  [dim]... and {len(tracker.read_order) - 15} more files[/dim]")
+            console.print(
+                f"  [dim]... and {len(tracker.read_order) - 15} more files[/dim]"
+            )
         console.print()
     else:
         console.print("[dim]No files read in this session.[/dim]")
@@ -2589,14 +2619,18 @@ async def _handle_files_command() -> bool:
 
         console.print(table)
         if len(tracker.write_order) > 15:
-            console.print(f"  [dim]... and {len(tracker.write_order) - 15} more files[/dim]")
+            console.print(
+                f"  [dim]... and {len(tracker.write_order) - 15} more files[/dim]"
+            )
         console.print()
     else:
         console.print("[dim]No files modified in this session.[/dim]")
         console.print()
 
     # Context note
-    console.print("[dim]Note: The system enforces read-before-edit to prevent hallucinations.[/dim]")
+    console.print(
+        "[dim]Note: The system enforces read-before-edit to prevent hallucinations.[/dim]"
+    )
     console.print("[dim]Files must be read before they can be edited.[/dim]")
     console.print()
 

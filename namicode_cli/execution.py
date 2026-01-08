@@ -46,7 +46,8 @@ from rich.panel import Panel
 from namicode_cli.config import COLORS, console, get_agent_color
 from namicode_cli.errors import ErrorHandler
 from namicode_cli.file_ops import FileOpTracker, build_approval_preview
-from namicode_cli.input import parse_file_mentions
+from namicode_cli.input import parse_file_mentions, ImageTracker
+from namicode_cli.image_utils import create_multimodal_content
 from namicode_cli.ui import (
     TokenTracker,
     format_tool_display,
@@ -224,6 +225,7 @@ async def execute_task(
     token_tracker: TokenTracker | None = None,
     backend=None,
     is_subagent: bool = False,
+    image_tracker: ImageTracker | None = None,
 ) -> None:
     """Execute any task by passing it directly to the AI agent."""
     # Initialize error handler for this execution
@@ -257,6 +259,15 @@ async def execute_task(
         final_input = "\n".join(context_parts)
     else:
         final_input = prompt_text
+
+    # Include images in the message content
+    images_to_send = []
+    if image_tracker:
+        images_to_send = image_tracker.get_images()
+    if images_to_send:
+        message_content = create_multimodal_content(final_input, images_to_send)
+    else:
+        message_content = final_input
 
     config = {
         "configurable": {"thread_id": session_state.thread_id},
@@ -331,7 +342,7 @@ async def execute_task(
         pending_text = ""
 
     # Stream input - may need to loop if there are interrupts
-    stream_input = {"messages": [{"role": "user", "content": final_input}]}
+    stream_input = {"messages": [{"role": "user", "content": message_content}]}
 
     try:
         while True:

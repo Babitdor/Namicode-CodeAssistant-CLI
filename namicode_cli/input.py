@@ -20,7 +20,7 @@ from prompt_toolkit.enums import EditingMode
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.output.vt100 import Vt100_Output
-
+from .image_utils import ImageData
 from .config import COLORS, COMMANDS, SessionState, Settings, console
 
 # Regex patterns for context-aware completion
@@ -30,6 +30,38 @@ SLASH_COMMAND_RE = re.compile(r"^/(?P<command>[a-z]*)$")
 AGENT_MENTION_RE = re.compile(r"^@([a-zA-Z0-9_-]+)\s+(.+)$", re.DOTALL)
 
 EXIT_CONFIRM_WINDOW = 3.0
+
+
+class ImageTracker:
+    """Track pasted images in the current conversation."""
+
+    def __init__(self) -> None:
+        self.images: list[ImageData] = []
+        self.next_id = 1
+
+    def add_image(self, image_data: ImageData) -> str:
+        """Add an image and return its placeholder text.
+
+        Args:
+            image_data: The image data to track
+
+        Returns:
+            Placeholder string like "[image 1]"
+        """
+        placeholder = f"[image {self.next_id}]"
+        image_data.placeholder = placeholder
+        self.images.append(image_data)
+        self.next_id += 1
+        return placeholder
+
+    def get_images(self) -> list[ImageData]:
+        """Get all tracked images."""
+        return self.images.copy()
+
+    def clear(self) -> None:
+        """Clear all tracked images and reset counter."""
+        self.images.clear()
+        self.next_id = 1
 
 
 class FilePathCompleter(Completer):

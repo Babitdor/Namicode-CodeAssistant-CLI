@@ -54,7 +54,7 @@ from namicode_cli.agent import create_agent_with_config, list_agents, reset_agen
 from namicode_cli.commands import execute_bash_command, handle_command
 from namicode_cli.config import (
     COLORS,
-    DEEP_AGENTS_ASCII,
+    NAMI_CODE_ASCII,
     SessionState,
     console,
     create_model,
@@ -62,7 +62,7 @@ from namicode_cli.config import (
 )
 from namicode_cli.execution import execute_task
 from namicode_cli.init_commands import init_project_config, interactive_init
-from namicode_cli.input import create_prompt_session
+from namicode_cli.input import create_prompt_session, ImageTracker
 from namicode_cli.migrate import check_migration_status, migrate_agents
 from namicode_cli.integrations.sandbox_factory import (
     create_sandbox,
@@ -313,7 +313,7 @@ async def simple_cli(
         sys.exit(1)
 
     if not no_splash:
-        console.print(DEEP_AGENTS_ASCII, style=f"bold {COLORS['primary']}")
+        console.print(NAMI_CODE_ASCII, style=f"bold {COLORS['primary']}")
         console.print()
 
     # Extract sandbox ID from backend if using sandbox mode
@@ -415,6 +415,7 @@ async def simple_cli(
     # Create prompt session and token tracker
     session = create_prompt_session(assistant_id, session_state)
     token_tracker = TokenTracker()
+    image_tracker = ImageTracker()
     token_tracker.set_baseline(baseline_tokens)
     if model_name:
         token_tracker.set_model(model_name)
@@ -592,6 +593,7 @@ async def simple_cli(
                 token_tracker,
                 backend=backend,
                 is_subagent=True,
+                image_tracker=image_tracker,
             )
 
         else:
@@ -603,6 +605,7 @@ async def simple_cli(
                 token_tracker,
                 backend=backend,
                 is_subagent=False,
+                image_tracker=image_tracker,
             )
 
         # Track message for auto-save and check if we should save
