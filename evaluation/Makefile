@@ -1,4 +1,4 @@
-.PHONY: all lint format test help run-hello-world run-terminal-bench-modal run-terminal-bench-docker
+.PHONY: all lint format test help run-hello-world run-terminal-bench-modal run-terminal-bench-docker run-namicode-docker run-namicode-daytona
 
 # Default target executed when no arguments are given to make.
 all: help
@@ -21,7 +21,10 @@ test_watch:
 	uv run ptw . -- $(TEST_FILE)
 
 
-# Run jobs
+######################
+# RUN DEEPAGENTS WRAPPER
+######################
+
 run-hello-world:
 	@mkdir -p jobs/hello-world
 	harbor run --agent-import-path deepagents_harbor:DeepAgentsWrapper --dataset hello-world --task-name hello-world -n 1 --jobs-dir tmp/hello-world --env docker
@@ -41,6 +44,41 @@ run-terminal-bench-docker:
 run-terminal-bench-runloop:
 	@mkdir -p jobs/terminal-bench
 	harbor run --agent-import-path deepagents_harbor:DeepAgentsWrapper --dataset terminal-bench@2.0 -n 10 --jobs-dir jobs/terminal-bench --env runloop
+
+######################
+# RUN NAMI CODE WRAPPER
+######################
+
+# Run Nami Code agent on Terminal-Bench with Docker (1 task, local testing)
+run-namicode-docker:
+	@mkdir -p jobs/namicode
+	harbor run --agent-import-path deepagents_harbor:NamiCodeWrapper --dataset terminal-bench@2.0 -n 1 --jobs-dir jobs/namicode --env docker
+
+# Run Nami Code agent on Terminal-Bench with Daytona (10 tasks)
+run-namicode-daytona:
+	@mkdir -p jobs/namicode
+	harbor run --agent-import-path deepagents_harbor:NamiCodeWrapper --dataset terminal-bench@2.0 -n 10 --jobs-dir jobs/namicode --env daytona
+
+# Run Nami Code agent on Terminal-Bench with Modal (4 tasks)
+run-namicode-modal:
+	@mkdir -p jobs/namicode
+	harbor run --agent-import-path deepagents_harbor:NamiCodeWrapper --dataset terminal-bench@2.0 -n 4 --jobs-dir jobs/namicode --env modal
+
+# Run Nami Code agent on specific task (use: make run-namicode-task TASK=code-from-image)
+TASK ?= hello-world
+run-namicode-task:
+	@mkdir -p jobs/namicode-$(TASK)
+	harbor run --agent-import-path deepagents_harbor:NamiCodeWrapper --dataset terminal-bench@2.0 --task-name $(TASK) -n 1 --jobs-dir jobs/namicode-$(TASK) --env docker
+
+# Run comparison: DeepAgents vs Nami Code on same task
+run-compare:
+	@echo "Running DeepAgents wrapper..."
+	@mkdir -p jobs/compare-deepagents
+	harbor run --agent-import-path deepagents_harbor:DeepAgentsWrapper --dataset terminal-bench@2.0 -n 1 --jobs-dir jobs/compare-deepagents --env docker
+	@echo ""
+	@echo "Running Nami Code wrapper..."
+	@mkdir -p jobs/compare-namicode
+	harbor run --agent-import-path deepagents_harbor:NamiCodeWrapper --dataset terminal-bench@2.0 -n 1 --jobs-dir jobs/compare-namicode --env docker
 
 ######################
 # LINTING AND FORMATTING
@@ -79,6 +117,16 @@ help:
 	@echo '-- TESTS --'
 	@echo 'test                         - run unit tests'
 	@echo 'test TEST_FILE=<test_file>   - run all tests in file'
+	@echo '-- DEEPAGENTS EVALUATION --'
+	@echo 'run-terminal-bench-docker    - run 1 task with DeepAgents (Docker)'
+	@echo 'run-terminal-bench-daytona   - run 40 tasks with DeepAgents (Daytona)'
+	@echo 'run-terminal-bench-modal     - run 4 tasks with DeepAgents (Modal)'
+	@echo '-- NAMI CODE EVALUATION --'
+	@echo 'run-namicode-docker          - run 1 task with Nami Code (Docker)'
+	@echo 'run-namicode-daytona         - run 10 tasks with Nami Code (Daytona)'
+	@echo 'run-namicode-modal           - run 4 tasks with Nami Code (Modal)'
+	@echo 'run-namicode-task TASK=name  - run specific task with Nami Code'
+	@echo 'run-compare                  - compare DeepAgents vs Nami Code'
 	@echo '-- DOCUMENTATION tasks are from the top-level Makefile --'
 
 

@@ -6,7 +6,7 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
-from deepagents import create_deep_agent
+from nami_deepagents import create_deep_agent
 from dotenv import load_dotenv
 from harbor.agents.base import BaseAgent
 from harbor.environments.base import BaseEnvironment
@@ -14,7 +14,9 @@ from harbor.models.agent.context import AgentContext
 
 # Load .env file if present
 load_dotenv()
-from deepagents_cli.agent import create_cli_agent
+from namicode_cli.agent import create_agent_with_config
+from namicode_cli.config import Settings
+from namicode_cli.model_manager import ModelManager, MODEL_PRESETS, ProviderType
 from harbor.models.trajectories import (
     Agent,
     FinalMetrics,
@@ -24,8 +26,8 @@ from harbor.models.trajectories import (
     ToolCall,
     Trajectory,
 )
-from langchain.chat_models import init_chat_model
 from langchain.messages import UsageMetadata
+from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langsmith import trace
@@ -65,6 +67,7 @@ class DeepAgentsWrapper(BaseAgent):
         temperature: float = 0.0,
         verbose: bool = True,
         use_cli_agent: bool = True,
+        provider: ProviderType | None = None,
         *args,
         **kwargs,
     ) -> None:
@@ -72,27 +75,78 @@ class DeepAgentsWrapper(BaseAgent):
 
         Args:
             logs_dir: Directory for storing logs
-            model_name: Name of the LLM model to use
+            model_name: Name of the LLM model to use (optional, uses configured model)
             temperature: Temperature setting for the model
             verbose: Enable verbose output
             use_cli_agent: If True, use create_cli_agent from deepagents-cli (default).
                           If False, use create_deep_agent from SDK.
+            provider: Model provider (openai, anthropic, ollama, google).
+                      If None, uses the configured provider from nami.config.json or env.
         """
         super().__init__(logs_dir, model_name, *args, **kwargs)
 
-        if model_name is None:
-            # Use DeepAgents default
-            model_name = "anthropic:claude-sonnet-4-5-20250929"
+        # Initialize model manager to get configured provider/model
+        model_manager = ModelManager()
 
-        self._model_name = model_name
+        # Determine provider and model
+        if provider is None and model_name is None:
+            # Use configured provider/model from nami.config.json or env
+            current = model_manager.get_current_provider()
+            if current:
+                provider_name, configured_model = current
+                # Map display name back to provider ID
+                provider = self._get_provider_id(provider_name)
+                model_name = configured_model
+            else:
+                # Fallback to Ollama if nothing configured
+                provider = "ollama"
+                model_name = MODEL_PRESETS["ollama"]["default_model"]
+        elif provider is not None and model_name is None:
+            # Provider specified but no model - use default for that provider
+            model_name = MODEL_PRESETS[provider]["default_model"]
+        elif provider is None and model_name is not None:
+            # Model specified but no provider - try to infer from model name
+            provider = self._infer_provider(model_name)
+
+        self._provider: ProviderType = provider or "ollama"
+        self._model_name = model_name or MODEL_PRESETS[self._provider]["default_model"]
         self._temperature = temperature
         self._verbose = verbose
         self._use_cli_agent = use_cli_agent
-        self._model = init_chat_model(model_name, temperature=temperature)
+
+        # Create model using ModelManager for consistent configuration
+        self._model: BaseChatModel = model_manager.create_model_for_provider(
+            self._provider, self._model_name
+        )
 
         # LangSmith run tracking for feedback
         self._langsmith_run_id: str | None = None
         self._task_name: str | None = None
+
+    @staticmethod
+    def _get_provider_id(provider_name: str) -> ProviderType:
+        """Convert display name to provider ID."""
+        name_map = {
+            "OpenAI": "openai",
+            "Anthropic": "anthropic",
+            "Ollama": "ollama",
+            "Google": "google",
+        }
+        return name_map.get(provider_name, "ollama")  # type: ignore
+
+    @staticmethod
+    def _infer_provider(model_name: str) -> ProviderType:
+        """Infer provider from model name."""
+        model_lower = model_name.lower()
+        if "gpt" in model_lower or "o1" in model_lower:
+            return "openai"
+        elif "claude" in model_lower:
+            return "anthropic"
+        elif "gemini" in model_lower:
+            return "google"
+        else:
+            # Default to Ollama for unknown models (likely local)
+            return "ollama"
 
     @staticmethod
     def name() -> str:
@@ -177,17 +231,14 @@ class DeepAgentsWrapper(BaseAgent):
             # Get Harbor's system prompt with directory context
             harbor_system_prompt = await self._get_formatted_system_prompt(backend)
 
-            # Use CLI agent with auto-approve mode
-            deep_agent, _ = create_cli_agent(
+            # Use Nami Code CLI agent
+            settings = Settings.from_environment()
+            deep_agent, _ = create_agent_with_config(
                 model=self._model,
                 assistant_id=environment.session_id,
+                tools=[],  # Tools provided by middleware
                 sandbox=backend,
-                sandbox_type=None,
-                system_prompt=harbor_system_prompt,  # Use Harbor's custom prompt
-                auto_approve=True,  # Skip HITL in Harbor
-                enable_memory=False,
-                enable_skills=False,  # Disable CLI skills for now
-                enable_shell=False,  # Sandbox provides execution
+                sandbox_type="harbor",
             )
         else:
             # Use SDK agent
