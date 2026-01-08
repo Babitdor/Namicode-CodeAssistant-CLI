@@ -544,6 +544,12 @@ The CLI supports these commands during interactive sessions:
 | `/kill <pid\|name>` | Kill a running process |
 | `/exit` | Exit the CLI |
 
+### .gitignore Rule
+
+**Critical**: Files listed in `.gitignore` should NEVER be read, scanned, edited, or accessed in any way. These files are excluded from version control for security, privacy, or practical reasons. Always respect this boundary.
+
+---
+
 ## File Operations Best Practices
 
 When working with files in this codebase, follow these patterns:

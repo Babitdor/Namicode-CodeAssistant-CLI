@@ -95,10 +95,3 @@ dmypy.json
 # Temporary files
 *.tmp
 *.temp
-
-# Claude files
-.claude/
-CLAUDE.md
-
-# Serena
-.serena/

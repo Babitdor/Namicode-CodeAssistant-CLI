@@ -2,11 +2,11 @@
 
 ### Features
 
-#### FileTrackerMiddleware - read_file-Before-edit Enforcement (037644f)
-- **Hard read-before-edit enforcement**: Rejects edit operations on files that haven't been read in the current session
-- **File content caching**: Stores file hashes and content for edit verification
-- **Security enhancement**: Prevents accidental edits to files outside project scope
-- Added `namicode_cli/file_tracker.py` with 572 lines of middleware implementation
+#### Image Loading Support (2d1a8cd)
+- New `namicode_cli/image_utils.py` module (209 lines)
+- Supports loading and displaying images in terminal
+- Added dependencies for image processing
+- Used for banner display and visual enhancements
 
 #### Session File Tracking & /files Command (037644f)
 - New `/files` command shows session file summary
@@ -14,6 +14,12 @@
 - Maintains write history per file with operation types
 - Provides `SessionFileTracker` dataclass for session-level tracking
 - Supports file operation statistics and content previews
+
+#### FileTrackerMiddleware - read_file-Before-edit Enforcement (037644f)
+- **Hard read-before-edit enforcement**: Rejects edit operations on files that haven't been read in the current session
+- **File content caching**: Stores file hashes and content for edit verification
+- **Security enhancement**: Prevents accidental edits to files outside project scope
+- Added `namicode_cli/file_tracker.py` with 572 lines of middleware implementation
 
 #### Lower Context Summarization Thresholds (037644f)
 - Triggers context summarization at 70% instead of previous threshold
@@ -45,6 +51,18 @@
 - Automatic memory updates based on user feedback
 - YAML frontmatter parsing for configuration
 
+### UI/UX Improvements
+
+#### Branded ASCII Art Update (2d1a8cd)
+- Renamed `DEEP_AGENTS_ASCII` → `NAMI_CODE_ASCII` for proper branding
+- Updated all references in `commands.py`, `ui.py`, `input.py`
+- Consistent branding across the CLI
+
+#### Interactive Command Improvements (2d1a8cd)
+- Improved agent creation prompts with better formatting
+- Added example agent types with clearer descriptions
+- Enhanced user guidance for agent configuration
+
 ### Bug Fixes
 
 #### MCP Tool Loading Fix (037644f, 477f392)
@@ -64,6 +82,10 @@
 - Tests for chat model and server functionality
 - Pyproject configuration for AI protocols
 
+#### New Module: Image Utilities (2d1a8cd)
+- New `namicode_cli/image_utils.py` for image loading/display
+- Terminal-compatible image rendering support
+
 #### New Module: Evaluation Framework (fdcd958)
 - Added `evaluation/` directory with Harbor backend
 - `deepagents_harbor/backend.py` - 377 line evaluation backend
@@ -76,12 +98,17 @@
 - Added `nest-asyncio` dependency for async support
 - Updated MCP-related dependencies
 - Added `wcmatch` pattern matching library
+- Added image processing dependencies (2d1a8cd)
 
 #### Memory System Architecture (fdcd958, 477f392)
 - Added `InMemoryStore` singleton for agent/subagent communication
 - `reset_shared_store()` for session reset
 - LangGraph Store backend integration
 - CompositeBackend for multi-backend routing
+
+#### Gitignore Updates (73c52f6)
+- Added `.serena/cache/` to gitignore
+- Excludes Serena AI assistant cache files
 
 ### Documentation
 
@@ -91,16 +118,26 @@
 - Covers project overview, architecture, workflows, best practices
 - AI assistant guidance for working with the codebase
 
-#### README Updates (28617c3)
-- Minor documentation refresh
+#### README Updates (176420e)
+- Updated documentation
+- Added project references and examples
+
+#### EVALUATION.md Documentation (New)
+- Added comprehensive `docs/EVALUATION.md` guide
+- Complete setup instructions for Harbor evaluation framework
+- LangSmith integration guide
+- Troubleshooting section
 
 ### Files Changed Summary
 
-| Commit | Files Changed | Lines Added/Removed |
-|--------|---------------|---------------------|
-| 037644f | 8 files | +1952/-35 |
-| 28617c3 | 1 file | +1/-1 |
-| 477f392 | 14 files | +706/-37 |
-| 493104c | 1 file | +3/0 |
-| fdcd958 | 26 files | +12569/-13 |
-| **Total** | **50+ files** | **~15,000 lines** |
+| Commit | Files Changed | Lines Added/Removed | Description |
+|--------|---------------|---------------------|-------------|
+| 2d1a8cd | 9 files | +413/-34 | UI changes, NAMI branding, image utilities |
+| 73c52f6 | 1 file | +4/-1 | .gitignore updates |
+| 176420e | 3 files | +3/-1 | README changes |
+| 037644f | 8 files | +1952/-35 | FileTrackerMiddleware, /files command, context thresholds |
+| 28617c3 | 1 file | +1/-1 | README update |
+| 477f392 | 14 files | +706/-37 | Agent colors, shared memory |
+| 493104c | 1 file | +3/0 | pyproject.toml |
+| fdcd958 | 26 files | +12569/-13 | ACP server, evaluation framework |
+| **Total** | **63+ files** | **~15,650 lines** | |
