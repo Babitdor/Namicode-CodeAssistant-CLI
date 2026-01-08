@@ -45,6 +45,11 @@ from langgraph.pregel import Pregel
 from langgraph.runtime import Runtime
 
 from namicode_cli.agent_memory import AgentMemoryMiddleware
+from namicode_cli.file_tracker import (
+    FileTrackerMiddleware,
+    get_session_tracker,
+    reset_session_tracker,
+)
 from namicode_cli.config import (
     COLORS,
     config,
@@ -84,12 +89,14 @@ def get_shared_store() -> InMemoryStore:
 
 
 def reset_shared_store() -> None:
-    """Reset the shared store and shared memory (useful for new sessions)."""
+    """Reset the shared store, shared memory, and file tracker (useful for new sessions)."""
     global _shared_store, _store_lock_initialized
     _shared_store = None
     _store_lock_initialized = False
     # Also reset the shared memory store
     reset_shared_memory_store()
+    # Also reset the file tracker for the new session
+    reset_session_tracker()
 
 
 def list_agents() -> None:
@@ -619,8 +626,14 @@ def create_agent_with_config(
         #     },  # No virtualization - use real paths
         # )
 
-        # Middleware: AgentMemoryMiddleware, SkillsMiddleware, MCPMiddleware, SharedMemoryMiddleware, ShellToolMiddleware
+        # Middleware: FileTrackerMiddleware, AgentMemoryMiddleware, SkillsMiddleware, MCPMiddleware, SharedMemoryMiddleware, ShellToolMiddleware
+        # FileTrackerMiddleware MUST be first to track all file operations and enforce read-before-edit
         agent_middleware = [
+            FileTrackerMiddleware(
+                enforce_read_before_edit=True,
+                truncate_results=True,
+                include_system_prompt=True,
+            ),
             AgentMemoryMiddleware(settings=settings, assistant_id=assistant_id),
             SkillsMiddleware(
                 skills_dir=skills_dir,
@@ -644,10 +657,16 @@ def create_agent_with_config(
             },  # No virtualization
         )
 
-        # Middleware: AgentMemoryMiddleware, SkillsMiddleware, MCPMiddleware, and SharedMemoryMiddleware
+        # Middleware: FileTrackerMiddleware, AgentMemoryMiddleware, SkillsMiddleware, MCPMiddleware, and SharedMemoryMiddleware
         # NOTE: File operations (ls, read, write, edit, glob, grep) and execute tool
         # are automatically provided by create_deep_agent when backend is a SandboxBackend.
+        # FileTrackerMiddleware MUST be first to track all file operations and enforce read-before-edit
         agent_middleware = [
+            FileTrackerMiddleware(
+                enforce_read_before_edit=True,
+                truncate_results=True,
+                include_system_prompt=True,
+            ),
             AgentMemoryMiddleware(settings=settings, assistant_id=assistant_id),
             SkillsMiddleware(
                 skills_dir=skills_dir,

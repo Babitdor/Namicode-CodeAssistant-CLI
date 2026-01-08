@@ -1571,8 +1571,21 @@ async def _agents_create_interactive(ps, settings) -> bool:
         "[dim]Agents are specialized AI assistants with custom system prompts.[/dim]"
     )
     console.print(
-        "[dim]Examples: code-reviewer, debugger, architect, documentation-writer[/dim]"
+        "[dim]They have full access to: file operations, shell commands, web search,[/dim]"
     )
+    console.print(
+        "[dim]dev servers, test runners, and shared memory.[/dim]"
+    )
+    console.print()
+    console.print("[bold]Example agent types:[/bold]")
+    console.print("  • [cyan]code-reviewer[/cyan] - Reviews code for quality, security, best practices")
+    console.print("  • [cyan]debugger[/cyan] - Diagnoses and fixes bugs systematically")
+    console.print("  • [cyan]architect[/cyan] - Designs system architecture and patterns")
+    console.print("  • [cyan]test-writer[/cyan] - Creates comprehensive test suites")
+    console.print("  • [cyan]refactor-assistant[/cyan] - Improves code structure and readability")
+    console.print("  • [cyan]api-designer[/cyan] - Designs RESTful/GraphQL APIs")
+    console.print("  • [cyan]security-auditor[/cyan] - Identifies security vulnerabilities")
+    console.print("  • [cyan]performance-optimizer[/cyan] - Optimizes code performance")
     console.print()
 
     # Get agent name
@@ -1654,7 +1667,13 @@ async def _agents_create_interactive(ps, settings) -> bool:
 
     # Get description
     console.print()
-    console.print("[dim]Describe what this agent specializes in:[/dim]")
+    console.print("[bold]Describe what this agent specializes in:[/bold]")
+    console.print("[dim]Be specific about the agent's focus area, expertise, and typical tasks.[/dim]")
+    console.print("[dim]Good examples:[/dim]")
+    console.print("[dim]  • 'Reviews Python code for security vulnerabilities, OWASP top 10, and secure coding practices'[/dim]")
+    console.print("[dim]  • 'Creates and maintains React component tests using Jest and React Testing Library'[/dim]")
+    console.print("[dim]  • 'Optimizes SQL queries and database schemas for PostgreSQL performance'[/dim]")
+    console.print()
     description = (await ps.prompt_async("Description: ")).strip()
 
     if not description:
@@ -1701,12 +1720,29 @@ async def _agents_create_interactive(ps, settings) -> bool:
 
     # Generate system prompt using LLM
     console.print()
-    console.print("[dim]Generating system prompt...[/dim]")
+    console.print("[dim]Generating comprehensive system prompt with tool guidelines...[/dim]")
 
     system_prompt = await _generate_agent_system_prompt(agent_name, description)
 
     if not system_prompt:
         console.print("[red]Failed to generate system prompt.[/red]")
+        console.print()
+        return True
+
+    # Show preview of generated prompt
+    console.print()
+    console.print("[bold]Generated System Prompt Preview:[/bold]")
+    console.print("─" * 60)
+    # Show first ~500 chars as preview
+    preview = system_prompt[:500] + "..." if len(system_prompt) > 500 else system_prompt
+    console.print(f"[dim]{preview}[/dim]")
+    console.print("─" * 60)
+    console.print()
+
+    # Ask for confirmation
+    confirm = (await ps.prompt_async("Create this agent? (y/n, default=y): ")).strip().lower() or "y"
+    if confirm not in ("y", "yes"):
+        console.print("[yellow]Cancelled - agent not created[/yellow]")
         console.print()
         return True
 
@@ -1724,11 +1760,14 @@ color: {agent_color}
 
     console.print()
     console.print(
-        f"[green]Agent '{agent_name}' created successfully! ({scope_label})[/green]"
+        f"[green]✓ Agent '{agent_name}' created successfully! ({scope_label})[/green]"
     )
     console.print(f"[dim]Location: {agent_dir}[/dim]")
     console.print()
-    console.print("[dim]Use @" + agent_name + " <query> to invoke this agent.[/dim]")
+    console.print("[bold]How to use:[/bold]")
+    console.print(f"  • Type [cyan]@{agent_name} <your query>[/cyan] to invoke this agent")
+    console.print(f"  • Run [cyan]nami --agent {agent_name}[/cyan] to start with this agent")
+    console.print(f"  • Edit [cyan]{agent_md}[/cyan] to customize the prompt")
     console.print()
     return True
 
@@ -1927,30 +1966,97 @@ async def _generate_agent_system_prompt(
     try:
         model = create_model()
 
-        generation_prompt = f"""Generate a comprehensive system prompt for an AI coding assistant agent named "{agent_name}".
+        # Comprehensive generation prompt with tool reference and examples
+        generation_prompt = f'''Generate a comprehensive system prompt for an AI coding assistant agent named "{agent_name}".
 
 Agent Description: {description}
 
-Create a detailed system prompt that includes:
+You MUST create a detailed, production-ready system prompt that includes ALL of the following sections:
 
-1. **Core Identity**: A clear statement of who this agent is and what they specialize in.
+---
 
-2. **Expertise Areas**: 3-5 specific domains or skills this agent excels at.
+## REQUIRED SECTIONS:
 
-3. **Communication Style**: How this agent should communicate (tone, verbosity, format preferences).
+### 1. Core Identity (2-3 sentences)
+A clear statement of who this agent is, what they specialize in, and their primary mission.
 
-4. **Working Guidelines**: Step-by-step approach this agent should follow when handling requests.
+### 2. Expertise Areas
+List 4-6 specific domains, skills, or technologies this agent excels at. Be specific to the description.
 
-5. **Tool Usage**: Guidelines for how this agent should use available tools (file reading, editing, searching, web browsing, etc.).
+### 3. Tone and Communication Style
+- How verbose vs concise should responses be?
+- What formatting preferences (code blocks, bullet points, etc.)?
+- When to ask clarifying questions vs make assumptions?
 
-6. **Best Practices**: Domain-specific best practices this agent should follow.
+### 4. Methodology / Working Guidelines
+Step-by-step approach this agent should follow. Include:
+- How to analyze requests before acting
+- When to read existing code before making changes
+- How to break down complex tasks
+- When to use todos for task tracking
 
-7. **Example Interactions**: 2-3 brief examples of how this agent would handle typical requests.
+### 5. Tool Usage Guidelines
+This agent has access to these tools - provide specific guidance on WHEN and HOW to use them:
 
-Format the output as a clean markdown document that can be used directly as a system prompt.
-Start with a header: # {agent_name} - AI Assistant
+**File Operations (from FilesystemMiddleware):**
+- `read_file(path, offset?, limit?)` - Read file contents. Use pagination for large files (limit=100-200 lines)
+- `write_file(path, content)` - Create new files or overwrite existing ones
+- `edit_file(path, old_string, new_string)` - Make precise string replacements. MUST read file first to get exact strings!
+- `glob(pattern)` - Find files by pattern (e.g., "**/*.py", "src/**/*.ts", "*.json")
+- `grep(pattern, path?)` - Search file contents with regex patterns
+- `ls(path)` - List directory contents
 
-Keep the prompt focused and actionable. Aim for 300-500 words."""
+**Shell & Execution (from ShellMiddleware):**
+- `shell(command)` - Execute shell commands (git, npm, pip, make, docker, etc.)
+
+**Web & Research (conditional - may require API keys):**
+- `web_search(query, max_results?, topic?)` - Search the web for documentation, solutions, examples (requires TAVILY_API_KEY)
+- `fetch_url(url)` - Fetch web pages and convert HTML to markdown
+- `http_request(url, method?, headers?, data?, params?)` - Make HTTP/API requests
+
+**Dev Tools:**
+- `run_tests(command?, working_dir?, timeout?)` - Run test suites with streaming output
+- `start_dev_server(command, name?, port?, working_dir?)` - Start dev servers as background processes (auto-opens browser)
+- `stop_server(pid?, name?)` - Stop running dev servers
+- `list_servers()` - List all active dev servers
+
+**Task Management (from TodoListMiddleware):**
+- `write_todos(todos)` - Track multi-step tasks. Use for 3+ step tasks. Each todo has: content, status (pending/in_progress/completed)
+
+**Shared Memory (from SharedMemoryMiddleware):**
+- `write_memory(key, content, tags?)` - Save findings to shared memory store (persists across agents)
+- `read_memory(key)` - Read from shared memory (shows author attribution)
+- `list_memories(tag_filter?)` - List all memory entries with previews
+- `delete_memory(key)` - Remove a memory entry
+
+**Subagent Delegation (from SubAgentMiddleware):**
+- `task(description, subagent_type?)` - Spawn subagents for isolated tasks. Use for parallel work or specialized subtasks
+
+### 6. Best Practices
+Domain-specific best practices this agent MUST follow. Include:
+- Code quality standards
+- Error handling expectations
+- Documentation requirements
+- Security considerations (if applicable)
+
+### 7. Example Interactions
+Provide 2-3 concrete examples showing how this agent would handle typical requests.
+Format as:
+```
+User: [example request]
+Agent approach: [step-by-step how agent handles it]
+```
+
+---
+
+## FORMAT REQUIREMENTS:
+- Start with: # {agent_name}
+- Use markdown headers (##, ###) for sections
+- Keep total length between 400-700 words
+- Be specific and actionable, not generic
+- Include code examples where relevant to the agent's specialty
+
+Generate the system prompt now:'''
 
         response = await model.ainvoke(generation_prompt)
 
@@ -2386,10 +2492,114 @@ async def handle_command(
             console.print()
         return True
 
+    if cmd == "files":
+        # Show file operation summary for the session
+        try:
+            return await _handle_files_command()
+        except Exception as e:
+            console.print(f"[red]Error running /files command: {e}[/red]")
+            import traceback
+
+            console.print(f"[dim]{traceback.format_exc()}[/dim]")
+            console.print()
+        return True
+
     console.print()
     console.print(f"[yellow]Unknown command: /{cmd}[/yellow]")
     console.print("[dim]Type /help for available commands.[/dim]")
     console.print()
+    return True
+
+
+async def _handle_files_command() -> bool:
+    """Handle /files command to show file operation summary for the session.
+
+    Returns:
+        True (always handled)
+    """
+    from namicode_cli.file_tracker import get_session_tracker
+
+    console.print()
+
+    tracker = get_session_tracker()
+
+    # Header
+    header = Text()
+    header.append("📁 ", style="bold")
+    header.append("Session File Operations", style=f"bold {COLORS['primary']}")
+
+    console.print(Panel(header, border_style=COLORS["primary"]))
+    console.print()
+
+    # Stats summary
+    console.print(f"[bold]Statistics:[/bold]")
+    console.print(f"  • Files read: [cyan]{len(tracker.files_read)}[/cyan]")
+    console.print(f"  • Files modified: [cyan]{len(tracker.files_written)}[/cyan]")
+    console.print(f"  • Total read operations: [dim]{tracker.total_reads}[/dim]")
+    console.print(f"  • Total write operations: [dim]{tracker.total_writes}[/dim]")
+    if tracker.rejected_edits > 0:
+        console.print(f"  • [red]Rejected edits (unread files): {tracker.rejected_edits}[/red]")
+    console.print()
+
+    # Files read
+    if tracker.files_read:
+        console.print("[bold]Files Read:[/bold]")
+        table = Table(show_header=True, header_style="bold", box=None, padding=(0, 1))
+        table.add_column("File", style="cyan")
+        table.add_column("Lines", justify="right")
+        table.add_column("Read At", style="dim")
+
+        for path in tracker.read_order[-15:]:  # Show last 15
+            record = tracker.files_read[path]
+            # Shorten path for display
+            display_path = path
+            if len(display_path) > 60:
+                display_path = "..." + display_path[-57:]
+            time_str = record.read_at.split("T")[1][:8] if "T" in record.read_at else record.read_at
+            table.add_row(display_path, str(record.line_count), time_str)
+
+        console.print(table)
+        if len(tracker.read_order) > 15:
+            console.print(f"  [dim]... and {len(tracker.read_order) - 15} more files[/dim]")
+        console.print()
+    else:
+        console.print("[dim]No files read in this session.[/dim]")
+        console.print()
+
+    # Files modified
+    if tracker.files_written:
+        console.print("[bold]Files Modified:[/bold]")
+        table = Table(show_header=True, header_style="bold", box=None, padding=(0, 1))
+        table.add_column("File", style="yellow")
+        table.add_column("Operations", justify="center")
+        table.add_column("Last Modified", style="dim")
+
+        for path in tracker.write_order[-15:]:  # Show last 15
+            records = tracker.files_written[path]
+            # Shorten path for display
+            display_path = path
+            if len(display_path) > 60:
+                display_path = "..." + display_path[-57:]
+            ops = ", ".join(r.operation for r in records[-3:])  # Last 3 ops
+            if len(records) > 3:
+                ops = f"({len(records)}x) " + ops
+            last_time = records[-1].written_at
+            time_str = last_time.split("T")[1][:8] if "T" in last_time else last_time
+            table.add_row(display_path, ops, time_str)
+
+        console.print(table)
+        if len(tracker.write_order) > 15:
+            console.print(f"  [dim]... and {len(tracker.write_order) - 15} more files[/dim]")
+        console.print()
+    else:
+        console.print("[dim]No files modified in this session.[/dim]")
+        console.print()
+
+    # Context note
+    console.print("[dim]Note: The system enforces read-before-edit to prevent hallucinations.[/dim]")
+    console.print("[dim]Files must be read before they can be edited.[/dim]")
+    console.print()
+
     return True
 
 

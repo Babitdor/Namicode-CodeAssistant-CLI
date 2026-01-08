@@ -106,17 +106,20 @@ def create_deep_agent(
     if model is None:
         model = get_default_model()
 
+    # Configure summarization triggers - lower thresholds to prevent context overflow
+    # Trigger earlier (70% instead of 85%) to leave room for tool results
+    # Keep more context (15% instead of 10%) to preserve important file operations
     if (
         model.profile is not None
         and isinstance(model.profile, dict)
         and "max_input_tokens" in model.profile
         and isinstance(model.profile["max_input_tokens"], int)
     ):
-        trigger = ("fraction", 0.85)
-        keep = ("fraction", 0.10)
+        trigger = ("fraction", 0.70)  # Trigger at 70% context usage (was 85%)
+        keep = ("fraction", 0.15)  # Keep 15% after summary (was 10%)
     else:
-        trigger = ("tokens", 170000)
-        keep = ("messages", 6)
+        trigger = ("tokens", 100000)  # Trigger at 100k tokens (was 170k)
+        keep = ("messages", 10)  # Keep last 10 messages (was 6)
 
     deepagent_middleware = [
         TodoListMiddleware(),

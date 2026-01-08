@@ -22,6 +22,7 @@ from namicode_cli.shell import ShellMiddleware
 from namicode_cli.skills import SkillsMiddleware
 from namicode_cli.mcp import get_shared_mcp_middleware
 from namicode_cli.shared_memory import SharedMemoryMiddleware
+from namicode_cli.file_tracker import FileTrackerMiddleware, get_session_tracker
 from namicode_cli.tracing import (
     is_tracing_enabled,
     get_tracing_config,
@@ -121,8 +122,15 @@ def create_subagent(
     else:
         subagent_backend = backend
 
-    # Middleware: AgentMemoryMiddleware, SkillsMiddleware, MCPMiddleware, SharedMemoryMiddleware, ShellToolMiddleware
+    # Middleware: FileTrackerMiddleware, AgentMemoryMiddleware, SkillsMiddleware, MCPMiddleware, SharedMemoryMiddleware, ShellToolMiddleware
+    # FileTrackerMiddleware uses shared session tracker so subagents inherit file read state from main agent
     subagent_middleware = [
+        FileTrackerMiddleware(
+            enforce_read_before_edit=True,
+            truncate_results=True,
+            include_system_prompt=True,
+            tracker=get_session_tracker(),  # Share tracker with main agent
+        ),
         AgentMemoryMiddleware(settings=settings, assistant_id=agent_name),
         SkillsMiddleware(
             skills_dir=skills_dir,
