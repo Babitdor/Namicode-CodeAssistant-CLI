@@ -1,4 +1,4 @@
-.PHONY: all lint format test help run test_integration test_watch
+.PHONY: all lint format test help run test_integration test_watch clean
 
 # Default target executed when no arguments are given to make.
 all: help
@@ -7,7 +7,7 @@ all: help
 # TESTING AND COVERAGE
 ######################
 
-# Define a variable for the test file path.
+# Define variables for test paths
 TEST_FILE ?= tests/unit_tests
 INTEGRATION_FILES ?= tests/integration_tests
 
@@ -17,37 +17,59 @@ test:
 test_integration:
 	uv run pytest $(INTEGRATION_FILES)
 
+test_all:
+	uv run pytest tests/
+
 test_watch:
 	uv run ptw . -- $(TEST_FILE)
 
-run:
-	uvx --no-cache --reinstall .
+test_cov:
+	uv run pytest --cov=namicode_cli --cov-report=term-missing $(TEST_FILE)
 
+######################
+# RUNNING
+######################
+
+run:
+	uv run nami
+
+run_reinstall:
+	uv sync --reinstall && uv run nami
 
 ######################
 # LINTING AND FORMATTING
 ######################
 
-# Define a variable for Python and notebook files.
-lint format: PYTHON_FILES=deepagents_cli/ tests/
-lint_diff format_diff: PYTHON_FILES=$(shell git diff --relative=. --name-only --diff-filter=d master | grep -E '\.py$$|\.ipynb$$')
+# Define Python files to lint/format
+PYTHON_FILES = namicode_cli/ tests/
 
-lint lint_diff:
-	[ "$(PYTHON_FILES)" = "" ] ||	uv run ruff format $(PYTHON_FILES) --diff
-	@if [ "$(LINT)" != "minimal" ]; then \
-		if [ "$(PYTHON_FILES)" != "" ]; then \
-			uv run ruff check $(PYTHON_FILES) --diff; \
-		fi; \
-	fi
-	# [ "$(PYTHON_FILES)" = "" ] || uv run mypy $(PYTHON_FILES)
+lint:
+	@echo "Running ruff format check..."
+	uv run ruff format $(PYTHON_FILES) --check
+	@echo "Running ruff linter..."
+	uv run ruff check $(PYTHON_FILES)
 
-format format_diff:
-	[ "$(PYTHON_FILES)" = "" ] || uv run ruff format $(PYTHON_FILES)
-	[ "$(PYTHON_FILES)" = "" ] || uv run ruff check --fix $(PYTHON_FILES)
+format:
+	@echo "Formatting code..."
+	uv run ruff format $(PYTHON_FILES)
+	@echo "Fixing lint issues..."
+	uv run ruff check --fix $(PYTHON_FILES)
 
-format_unsafe:
-	[ "$(PYTHON_FILES)" = "" ] || uv run ruff format --unsafe-fixes $(PYTHON_FILES)
-	
+######################
+# CLEANUP
+######################
+
+clean:
+	@echo "Cleaning up..."
+	-rm -rf .pytest_cache
+	-rm -rf __pycache__
+	-rm -rf namicode_cli/__pycache__
+	-rm -rf tests/__pycache__
+	-rm -rf .ruff_cache
+	-rm -rf *.egg-info
+	-rm -rf dist
+	-rm -rf build
+	@echo "Done."
 
 ######################
 # HELP
@@ -55,12 +77,25 @@ format_unsafe:
 
 help:
 	@echo '===================='
+	@echo 'Nami-Code Makefile'
+	@echo '===================='
+	@echo ''
+	@echo '-- RUNNING --'
+	@echo 'run                          - run Nami CLI'
+	@echo 'run_reinstall                - reinstall and run Nami CLI'
+	@echo ''
+	@echo '-- TESTING --'
+	@echo 'test                         - run unit tests'
+	@echo 'test TEST_FILE=<path>        - run specific test file or directory'
+	@echo 'test_integration             - run integration tests'
+	@echo 'test_all                     - run all tests'
+	@echo 'test_watch                   - run tests in watch mode'
+	@echo 'test_cov                     - run tests with coverage report'
+	@echo ''
 	@echo '-- LINTING --'
 	@echo 'format                       - run code formatters'
 	@echo 'lint                         - run linters'
-	@echo '-- TESTS --'
-	@echo 'test                         - run unit tests'
-	@echo 'test TEST_FILE=<test_file>   - run all tests in file'
-	@echo '-- DOCUMENTATION tasks are from the top-level Makefile --'
-
-
+	@echo ''
+	@echo '-- CLEANUP --'
+	@echo 'clean                        - remove build artifacts and caches'
+	@echo ''

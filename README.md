@@ -144,20 +144,126 @@ Skills follow [Anthropic's progressive disclosure pattern](https://www.anthropic
 
 ### MCP Integration
 
-Extend the agent with Model Context Protocol servers:
+Extend the agent with Model Context Protocol servers for specialized capabilities:
+
+**Available Presets:**
 
 ```bash
-# Add an HTTP MCP server
-nami mcp add docs-server --transport http --url https://example.com/mcp
+# Add filesystem MCP server (preset)
+nami mcp add filesystem --preset filesystem
 
-# Add a stdio MCP server
-nami mcp add filesystem --transport stdio --command "python -m mcp_server"
+# Add GitHub MCP server (preset)
+nami mcp add github --preset github
 
-# List configured servers
-nami mcp list
+# Add PostgreSQL MCP server (preset)
+nami mcp add postgres --preset postgres
+
+# Add Puppeteer MCP server (preset)
+nami mcp add puppeteer --preset puppeteer
 ```
 
-See [MCP_GUIDE.md](MCP_GUIDE.md) for detailed configuration.
+**Custom MCP Servers:**
+
+```bash
+# HTTP transport
+nami mcp add custom-server --transport http --url https://example.com/mcp
+
+# Stdio transport (local process)
+nami mcp add my-server --transport stdio --command "python -m my_mcp_server"
+
+# Stdio with arguments
+nami mcp add fetch-server --transport stdio --command "npx" --args "-y", "@modelcontextprotocol/server-fetch"
+```
+
+**MCP Management:**
+
+```bash
+# List all configured MCP servers
+nami mcp list
+
+# Remove an MCP server
+nami mcp remove my-server
+
+# View MCP server details
+nami mcp info my-server
+```
+
+**Environment Variables for MCP:**
+
+```bash
+# Some MCP servers require additional configuration
+export GITHUB_API_KEY="your-github-token"
+export DATABASE_URL="postgresql://user:pass@localhost:5432/db"
+```
+
+See [MCP_GUIDE.md](MCP_GUIDE.md) for detailed configuration and custom server development.
+
+### Terminal-Bench Evaluation
+
+The CLI includes a built-in Harbor evaluation framework for benchmarking agent performance on standardized coding tasks.
+
+**Setup:**
+
+```bash
+# Navigate to evaluation directory
+cd evaluation
+
+# Install evaluation dependencies
+make setup
+
+# Configure your API keys
+export OPENAI_API_KEY="your-api-key"
+# or
+export ANTHROPIC_API_KEY="your-api-key"
+```
+
+**Running Evaluations:**
+
+```bash
+# Run all Terminal-Bench tasks
+make evaluate
+
+# Run specific subset of tasks
+make evaluate TASK_FILTER="python-*.py"
+
+# Run with custom model
+make evaluate MODEL="gpt-4o" PROVIDER="openai"
+
+# Run headless (no browser automation)
+make evaluate HEADLESS=1
+```
+
+**Analyzing Results:**
+
+```bash
+# Generate performance report
+make analyze
+
+# Compare against baseline
+make compare BASELINE="path/to/baseline/results.json"
+
+# Export results to JSON
+make export FORMAT=json
+```
+
+**Result Interpretation:**
+
+Results are stored in `evaluation/results/` with:
+- `config.json` - Task configuration and parameters
+- `result.json` - Pass/fail status, execution time, and scores
+- `exception.txt` - Error details (if failed)
+
+**Evaluation Categories:**
+
+| Category | Description | Example Tasks |
+|----------|-------------|---------------|
+| Code Generation | Write code from specifications | "Write a Python function to sort a list" |
+| Bug Fix | Identify and fix bugs | "Fix the off-by-one error in this function" |
+| Refactoring | Improve code structure | "Extract this logic into a helper function" |
+| Documentation | Add docstrings and comments | "Document this class with docstrings" |
+| Testing | Write unit tests | "Add tests for edge cases" |
+
+See [EVALUATION.md](docs/EVALUATION.md) for detailed setup, custom task creation, and API integration.
 
 ## Development
 
@@ -220,21 +326,6 @@ The CLI implements a "Deep Agent" architecture with four key components:
 - `integrations/` - Sandbox providers (Modal, Runloop, Daytona, Docker)
 - `evaluation/` - Harbor evaluation framework for Terminal-Bench benchmarking
 - `shared_memory.py` - Cross-agent memory sharing with attribution
-
-### Evaluation Framework
-
-The CLI includes a built-in evaluation framework for benchmarking agent performance:
-
-```bash
-# Run Terminal-Bench evaluations
-cd evaluation
-make evaluate
-
-# Analyze results
-make analyze
-```
-
-See [EVALUATION.md](docs/EVALUATION.md) for detailed setup and usage instructions.
 
 ## Dependencies
 

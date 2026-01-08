@@ -2,6 +2,18 @@
 
 ### Features
 
+#### Harbor Evaluation Wrapper Improvements (4a10323)
+- Added Windows asyncio ProactorEventLoop policy to fix subprocess issues
+- Updated NamiCodeWrapper to use ModelManager for provider detection
+- Added "harbor" sandbox type for Terminal-Bench evaluations
+- Fixed create_agent_with_config call to match current API
+
+#### Memory System Enhancement - .gitignore Rule (28f8928)
+- Added critical `.gitignore` rule to project memory (NAMI.md)
+- Added universal `.gitignore` rule to user agent memory for all projects
+- Files in `.gitignore` are now never accessed for security/privacy
+- Enforced across all AI assistants working with the codebase
+
 #### Image Loading Support (2d1a8cd)
 - New `namicode_cli/image_utils.py` module (209 lines)
 - Supports loading and displaying images in terminal
@@ -100,6 +112,13 @@
 - Added `wcmatch` pattern matching library
 - Added image processing dependencies (2d1a8cd)
 
+#### Evaluation Framework Improvements (47e2801)
+- Major refactor of `deepagents_wrapper.py` for better evaluation handling
+- Added comprehensive `namicode_wrapper.py` with terminal-bench integration
+- Added Terminal-Bench dataset test results (60+ evaluation tasks)
+- Added test result artifacts for benchmark validation
+- Added `evaluation/deepagents_harbor/config.json` for Harbor configuration
+
 #### Memory System Architecture (fdcd958, 477f392)
 - Added `InMemoryStore` singleton for agent/subagent communication
 - `reset_shared_store()` for session reset
@@ -132,6 +151,9 @@
 
 | Commit | Files Changed | Lines Added/Removed | Description |
 |--------|---------------|---------------------|-------------|
+| 4a10323 | 3 files | +21/-78 | Harbor evaluation wrapper, Windows asyncio fix |
+| 47e2801 | 200+ files | +11,500/-0 | Evaluation framework, Terminal-Bench results |
+| 28f8928 | 5 files | +143/-22 | .gitignore rule, user preferences |
 | 2d1a8cd | 9 files | +413/-34 | UI changes, NAMI branding, image utilities |
 | 73c52f6 | 1 file | +4/-1 | .gitignore updates |
 | 176420e | 3 files | +3/-1 | README changes |
@@ -140,4 +162,4 @@
 | 477f392 | 14 files | +706/-37 | Agent colors, shared memory |
 | 493104c | 1 file | +3/0 | pyproject.toml |
 | fdcd958 | 26 files | +12569/-13 | ACP server, evaluation framework |
-| **Total** | **63+ files** | **~15,650 lines** | |
+| **Total** | **270+ files** | **~27,170 lines** | |
