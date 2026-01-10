@@ -252,19 +252,17 @@ def _find_project_root(start_path: Path | None = None) -> Path | None:
 def _find_project_agent_md(project_root: Path) -> Path | None:
     """Find project-specific CLAUDE.md and NAMI.md file(s).
 
-    Checks multiple locations and returns ALL that exist (in priority order):
+    Checks multiple locations and returns one that exist (in priority order):
     1. project_root/.claude/CLAUDE.md (Claude Code primary)
     2. project_root/CLAUDE.md (Claude Code fallback)
     3. project_root/.nami/NAMI.md (Nami primary)
     4. project_root/NAMI.md (Nami fallback - created by /init command)
 
-    All files found will be loaded and combined hierarchically.
-
     Args:
         project_root: Path to the project root directory.
 
     Returns:
-        List of paths to project config files (may contain 0-4 paths).
+        paths to project config files.
     """
 
     # Priority 1: .claude/CLAUDE.md (Claude Code style)
