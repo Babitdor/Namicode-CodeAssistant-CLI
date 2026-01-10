@@ -1,3 +1,30 @@
+## v0.0.13 - 2025-01-10
+
+### Features
+
+#### Session Management System (2399a25)
+- Added `session_display.py` (243 lines) for enhanced session visualization
+- Added `session_persistence.py` (200 lines) for saving/restoring session state
+- Added `session_prompt_builder.py` (175 lines) for building contextual prompts
+- Added `session_summarization.py` (192 lines) for conversation summarization
+- Added `workspace_anchoring.py` (220 lines) for workspace context management
+
+#### Configuration Updates (2399a25)
+- Enhanced `config.py` with improved model settings handling
+- Updated `main.py` with session management integration (+141 lines)
+- Added `.claude/settings.local.json` for local settings
+- Updated `.gitignore` to exclude local settings
+
+#### MCP Middleware Improvements (2399a25)
+- Enhanced `mcp/middleware.py` with session-aware MCP management
+
+### Bug Fixes
+
+#### Agent Memory Fix (Pending)
+- Fixed `agent_memory.py` - Added list conversion for project memory paths to handle single path returns properly
+
+---
+
 ## v0.0.12 - 2025-01-10
 
 ### Features

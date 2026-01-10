@@ -236,9 +236,12 @@ class AgentMemoryMiddleware(AgentMiddleware):
 
         # Load project memory from ALL available sources if not already in state
         if "project_memory" not in state:
-            project_paths = self.settings.get_project_agent_md_paths()
+            project_path = self.settings.get_project_agent_md_paths()
             combined_memories: list[str] = []
             self.loaded_project_memory_sources = []
+
+            # Convert single path to list for iteration
+            project_paths = [project_path] if project_path else []
 
             for path in project_paths:
                 with contextlib.suppress(OSError, UnicodeDecodeError):
