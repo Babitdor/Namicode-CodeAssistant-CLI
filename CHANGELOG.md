@@ -1,3 +1,70 @@
+## v0.0.12 - 2025-01-10
+
+### Features
+
+#### Subagent Delegation System Overhaul (0f64635)
+- Complete refactor of the subagent delegation system in `agent.py`
+- Added comprehensive subagent prompt documentation in `AGENT_PROMPT_ENHANCEMENT.md`
+- Enhanced `default_agent_prompt.md` with detailed delegation instructions
+- Added subagent observability documentation in `SUBAGENT_OBSERVABILITY.md`
+- Implemented subagent color tracking via `set_subagent_color()`, `get_subagent_color()`, `get_all_subagent_colors()`, `clear_subagent_colors()` functions
+- Added subagent output formatting with agent type labels (e.g., `🤖 [general-purpose]`)
+- Added `get_shared_store()` singleton pattern for agent/subagent memory sharing
+- Enhanced `create_agent_with_config()` with shared InMemoryStore integration
+
+#### Agent and Subagent System Prompt Improvements (028396a)
+- Comprehensive `.nami/NAMI.md` file (592 lines) for AI assistant guidance
+- Removed redundant documentation files (`AGENT_PROMPT_ENHANCEMENT.md`, `IMPLEMENTATION_SUMMARY.md`, `SUBAGENT_OBSERVABILITY.md`, `Task.md`, `UNICODE_FIX.md`)
+- Updated `default_agent_prompt.md` with improved delegation instructions
+- Added subagent task tool documentation with example usage patterns
+- Added subagent color customization support (hex codes like `#ef4444`)
+
+#### Execution Improvements (0f64635)
+- Added `execute_bash_command()` for command execution in `commands.py`
+- Enhanced `execute_task()` with better error handling
+- Added tool call tracking and visibility improvements
+- Added `TokenTracker` improvements in `ui.py`
+- Enhanced `token_utils.py` for better token calculation
+
+### Bug Fixes
+
+#### Subagent Delegation Fixes (0f64635)
+- Fixed subagent delegation system prompt issues
+- Resolved context isolation between main agent and subagents
+- Fixed shared memory communication between agents
+- Added proper subagent color inheritance
+
+#### Memory System Fixes (0f64635)
+- Fixed `AgentMemoryMiddleware` initialization
+- Added proper memory persistence for subagents
+- Fixed memory store reset on session boundaries
+
+### Documentation
+
+#### Comprehensive Documentation Update (028396a)
+- Added `.nami/NAMI.md` (592 lines) - comprehensive AI assistant guidance
+- Added `CLAUDE.md` (281 lines) - Claude Code specific guidance
+- Removed fragmented documentation files
+- Consolidated project memory into single authoritative source
+
+#### README Updates (07d8d5f, f44bf0f, 52f9890, 12ba225)
+- Updated project documentation
+- Added new features and improvements
+- Fixed outdated information
+
+### Files Changed Summary
+
+| Commit | Files Changed | Description |
+|--------|---------------|-------------|
+| 028396a | 8 files | +673/-904 | NAMI.md creation, documentation consolidation, prompt enhancement |
+| 0f64635 | 13 files | +1480/-18 | Subagent delegation fixes, memory system, observability |
+| 07d8d5f | 1 file | +2/-2 | README update |
+| f44bf0f | 1 file | +1/-1 | README update |
+| 52f9890 | 1 file | +1/-1 | README update |
+| 12ba225 | 1 file | +1/-1 | README update |
+
+---
+
 ## v0.0.11 - 2025-01-08
 
 ### Features
