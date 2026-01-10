@@ -323,6 +323,8 @@ async def execute_task(
     response_shown_via_updates = False
     # Track when a subagent (task tool) is active - skip display in this case
     # since invoke_subagent handles subagent output
+    # Track task tool calls for subagent banner display: {tool_call_id: (subagent_type, description)}
+    active_subagents: dict[str, tuple[str, str]] = {}
 
     def flush_text_buffer(*, final: bool = False) -> None:
         """Flush accumulated assistant text as rendered markdown when appropriate."""
@@ -352,6 +354,7 @@ async def execute_task(
             # Reset per-turn flags and tracking
             response_shown_via_updates = False
             displayed_tool_ids.clear()
+            active_subagents.clear()
             # Track all pending interrupts: {interrupt_id: request_data}
             pending_interrupts: dict[str, HITLRequest] = {}
 
@@ -499,6 +502,29 @@ async def execute_task(
                         tool_status = getattr(message, "status", "success")
                         tool_content = format_tool_message_content(message.content)
                         record = file_op_tracker.complete_with_message(message)
+
+                        # Special handling for task tool completion: display completion banner
+                        tool_call_id = getattr(message, "tool_call_id", None)
+                        if tool_name == "task" and tool_call_id in active_subagents:
+                            subagent_type, _ = active_subagents.pop(tool_call_id)
+                            subagent_color = get_agent_color(subagent_type)
+
+                            flush_text_buffer(final=True)
+                            if spinner_active:
+                                status.stop()
+                                spinner_active = False
+
+                            console.print()
+                            status_icon = "✓" if tool_status == "success" else "✗"
+                            console.print(
+                                f"{status_icon} {subagent_type} completed",
+                                style=f"{subagent_color}",
+                            )
+                            console.print()
+
+                            if not spinner_active:
+                                status.start()
+                                spinner_active = True
 
                         # Reset spinner message after tool completes
                         if spinner_active:
@@ -683,6 +709,30 @@ async def execute_task(
                                     style=f"dim {COLORS['tool']}",
                                     markup=False,
                                 )
+
+                                # Special handling for task tool: display subagent delegation banner
+                                if buffer_name == "task" and "subagent_type" in parsed_args:
+                                    subagent_type = parsed_args["subagent_type"]
+                                    description = parsed_args.get("description", "")
+
+                                    # Store for completion banner later
+                                    if buffer_id:
+                                        active_subagents[buffer_id] = (subagent_type, description)
+
+                                    # Get subagent color if available
+                                    subagent_color = get_agent_color(subagent_type)
+
+                                    # Truncate description for banner
+                                    desc_preview = description[:60] + "..." if len(description) > 60 else description
+
+                                    # Display delegation banner
+                                    console.print()
+                                    banner_text = f"╭─ Delegating to {subagent_type} " + "─" * (50 - len(subagent_type))
+                                    console.print(banner_text, style=f"dim {subagent_color}")
+                                    if desc_preview:
+                                        console.print(f"│ Task: {desc_preview}", style=f"dim {subagent_color}")
+                                    console.print("╰" + "─" * 60, style=f"dim {subagent_color}")
+                                    console.print()
 
                                 # Restart spinner with context about which tool is executing
                                 status.update(

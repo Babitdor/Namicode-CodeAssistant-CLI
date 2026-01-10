@@ -232,7 +232,7 @@ class AgentMemoryMiddleware(AgentMiddleware):
             user_path = self.settings.get_user_agent_md_path(self.assistant_id)
             if user_path.exists():
                 with contextlib.suppress(OSError, UnicodeDecodeError):
-                    result["user_memory"] = user_path.read_text()
+                    result["user_memory"] = user_path.read_text(encoding='utf-8')
 
         # Load project memory from ALL available sources if not already in state
         if "project_memory" not in state:
@@ -242,7 +242,7 @@ class AgentMemoryMiddleware(AgentMiddleware):
 
             for path in project_paths:
                 with contextlib.suppress(OSError, UnicodeDecodeError):
-                    content = path.read_text()
+                    content = path.read_text(encoding='utf-8')
                     if content.strip():
                         # Add header showing the source file
                         relative_path = (

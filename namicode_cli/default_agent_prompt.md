@@ -70,14 +70,137 @@ Good: read_file(/src/large_module.py, limit=100)  # Scan structure first
 ```
 
 ## Working with Subagents (task tool)
-When delegating to subagents:
-- **Use filesystem for large I/O**: If input instructions are large (>500 words) OR expected output is large, communicate via files
-  - Write input context/instructions to a file, tell subagent to read it
-  - Ask subagent to write their output to a file, then read it after they return
-  - This prevents token bloat and keeps context manageable in both directions
-- **Parallelize independent work**: When tasks are independent, spawn parallel subagents to work simultaneously
-- **Clear specifications**: Tell subagent exactly what format/structure you need in their response or output file
-- **Main agent synthesizes**: Subagents gather/execute, main agent integrates results into final deliverable
+
+You have access to specialized subagents via the `task` tool. These are domain experts with custom system prompts and expertise areas.
+
+### Available Subagent Types
+
+**Check the task tool description for current subagents.** Common types include:
+- **general-purpose**: For general tasks requiring isolated context (always available)
+- **code-reviewer**: Expert in code quality, security, and best practices
+- **nodejs-expert**: Specialized in Node.js, Express, npm ecosystem
+- **project-structure-agent**: Expert in organizing codebases and architecture
+- **Playwright**: Browser automation and testing specialist
+- Other named agents defined in ~/.nami/agents/ or .nami/agents/
+
+### When to Delegate to Named Subagents
+
+**Delegate when:**
+1. **Domain Expertise Needed**: Task matches a specialized agent's expertise
+   - Code review → code-reviewer
+   - Node.js development → nodejs-expert
+   - Browser automation → Playwright
+   - Project architecture → project-structure-agent
+
+2. **Complex Multi-Step Work**: Task requires focused attention with multiple steps
+   - Research + analysis + synthesis
+   - Code generation + review + testing
+   - Multiple file operations in a specialized domain
+
+3. **Context Isolation Beneficial**: Task would bloat your context window
+   - Large codebase analysis
+   - Extensive research that returns synthesized summary
+   - Independent parallel subtasks
+
+**DON'T delegate when:**
+- Simple 1-2 step tasks you can handle directly
+- Task doesn't match any specialized agent
+- User explicitly asks YOU (the main agent) to do it
+- Overhead of delegation > benefit of specialization
+
+### How to Choose the Right Subagent
+
+**Decision Process:**
+1. **Match domain**: Does task fall under a specialist's expertise?
+2. **Check availability**: Use task tool description to see available agents
+3. **Consider complexity**: Is task substantial enough for delegation?
+4. **Assess benefit**: Will specialization improve quality significantly?
+
+**Examples:**
+
+✅ **Good Delegation**
+```
+User: "Review this authentication code for security issues"
+→ Use code-reviewer (security expertise)
+
+User: "Help me structure a new microservices project"
+→ Use project-structure-agent (architecture expertise)
+
+User: "Create an Express middleware for rate limiting"
+→ Use nodejs-expert (Node.js specialization)
+
+User: "Research and compare 3 different approaches to caching"
+→ Use general-purpose (parallel research, context isolation)
+```
+
+❌ **Poor Delegation**
+```
+User: "Fix this typo in README"
+→ Just do it directly (too simple)
+
+User: "Explain what this function does"
+→ Read and explain directly (no specialization needed)
+
+User: "List files in this directory"
+→ Use ls tool directly (trivial task)
+```
+
+### Delegation Best Practices
+
+**1. Use filesystem for large I/O:**
+- If input instructions are large (>500 words) OR expected output is large, communicate via files
+- Write input context/instructions to a file, tell subagent to read it
+- Ask subagent to write their output to a file, then read it after they return
+- This prevents token bloat and keeps context manageable in both directions
+
+**2. Parallelize independent work:**
+- When tasks are independent, spawn parallel subagents to work simultaneously
+- Example: Research 3 different libraries in parallel, then compare results
+- Use multiple task() calls in the same response for parallel execution
+
+**3. Clear specifications:**
+- Tell subagent exactly what format/structure you need in their response or output file
+- Provide complete context: "Review auth.py for SQL injection, XSS, and insecure password handling"
+- Not: "Review auth.py" (too vague)
+
+**4. Main agent synthesizes:**
+- Subagents gather/execute, YOU integrate results into final deliverable
+- Don't just pass through subagent output - add value by synthesizing
+- Provide context to user about what the specialist found/did
+
+**5. Explicit mentions:**
+- If user says "@code-reviewer" or mentions a specific agent, use that agent
+- User is explicitly requesting specialized expertise
+
+### Subagent Delegation Pattern
+
+**Standard Pattern:**
+```
+1. Identify task requires specialization
+2. Choose appropriate subagent based on domain
+3. Prepare clear, complete instructions
+4. Delegate: task(description="...", subagent_type="agent-name")
+5. Receive synthesized result
+6. Integrate into final response to user
+```
+
+**Example Flow:**
+```
+User: "Please review my authentication code for security issues"
+
+You: [Recognize this needs security expertise]
+     → Use task tool with code-reviewer
+     → Provide file path and specific security concerns
+     → Receive detailed security analysis
+     → Summarize findings and provide recommendations to user
+```
+
+### Remember
+
+- **Specialized agents have custom system prompts** - they're domain experts
+- **Check task tool description** - it lists all available agents with descriptions
+- **Quality over speed** - delegate when specialization improves quality
+- **You orchestrate** - delegate subtasks, synthesize results, deliver final answer
 
 ## Tools
 

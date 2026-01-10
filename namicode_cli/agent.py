@@ -32,6 +32,7 @@ from nami_deepagents import create_deep_agent
 from nami_deepagents.backends import CompositeBackend, StateBackend, StoreBackend
 from nami_deepagents.backends.filesystem import FilesystemBackend
 from nami_deepagents.backends.sandbox import SandboxBackendProtocol
+from nami_deepagents.middleware.subagents import SubAgent
 from langgraph.store.memory import InMemoryStore
 from langchain.agents.middleware import (
     InterruptOnConfig,
@@ -55,6 +56,8 @@ from namicode_cli.config import (
     config,
     console,
     get_default_coding_instructions,
+    parse_agent_color,
+    set_agent_color,
     settings,
 )
 from namicode_cli.integrations.sandbox_factory import get_default_working_dir
@@ -99,6 +102,102 @@ def reset_shared_store() -> None:
     reset_session_tracker()
 
 
+def _extract_agent_description(agent_md_content: str) -> str:
+    """Extract a description from agent.md content.
+
+    Looks for the first substantial line of content (ignoring headers and blank lines).
+
+    Args:
+        agent_md_content: The content of the agent.md file
+
+    Returns:
+        A brief description extracted from the file, or a default message
+    """
+    lines = agent_md_content.strip().split("\n")
+
+    for line in lines[:10]:  # Check first 10 lines
+        line = line.strip()
+        # Skip empty lines, headers, and very short lines
+        if line and not line.startswith("#") and len(line) > 30:
+            # Truncate if too long
+            if len(line) > 150:
+                return line[:147] + "..."
+            return line
+
+    # Fallback: return a generic description
+    return "Agent with custom system prompt and tools"
+
+
+def build_named_subagents(
+    assistant_id: str,
+    tools: list[BaseTool],
+) -> list[SubAgent]:
+    """Build SubAgent specifications from all available named agents.
+
+    Reads all agents from both global (~/.nami/agents/) and project (.nami/agents/)
+    directories, excluding the current main agent, and converts them into SubAgent
+    specifications that can be passed to SubAgentMiddleware.
+
+    Args:
+        assistant_id: The name of the current main agent (to exclude from subagents)
+        tools: The list of tools to provide to each subagent
+
+    Returns:
+        List of SubAgent specifications ready for SubAgentMiddleware
+    """
+    from namicode_cli.config import settings
+
+    subagents: list[SubAgent] = []
+    all_agents = settings.get_all_agents()
+
+    for agent_name, agent_dir, scope in all_agents:
+        # Skip the current main agent
+        if agent_name == assistant_id:
+            continue
+
+        agent_md_path = agent_dir / "agent.md"
+
+        # Skip if agent.md doesn't exist
+        if not agent_md_path.exists():
+            console.print(
+                f"[dim yellow]Warning: Skipping agent '{agent_name}' - no agent.md file[/dim yellow]"
+            )
+            continue
+
+        try:
+            system_prompt = agent_md_path.read_text(encoding="utf-8")
+        except Exception as e:
+            console.print(
+                f"[dim yellow]Warning: Could not read agent.md for '{agent_name}': {e}[/dim yellow]"
+            )
+            continue
+
+        # Extract description from the agent.md content
+        description = _extract_agent_description(system_prompt)
+
+        # Parse and register agent color from YAML frontmatter
+        agent_color = parse_agent_color(agent_md_path)
+        if agent_color:
+            set_agent_color(agent_name, agent_color)
+
+        # Create SubAgent specification
+        subagent: SubAgent = {
+            "name": agent_name,
+            "description": f"[{scope}] {description}",
+            "system_prompt": system_prompt,
+            "tools": tools,  # Same tools as main agent
+            # model and middleware will use defaults from SubAgentMiddleware
+        }
+
+        # Add color to subagent if available
+        if agent_color:
+            subagent["color"] = agent_color
+
+        subagents.append(subagent)
+
+    return subagents
+
+
 def list_agents() -> None:
     """List all available agents with detailed information."""
     agents = settings.get_all_agents()
@@ -140,7 +239,7 @@ def list_agents() -> None:
         # Check for agent.md existence and show summary
         agent_md = agent_path / "agent.md"
         if agent_md.exists():
-            content = agent_md.read_text()
+            content = agent_md.read_text(encoding='utf-8')
             # Extract first line or first sentence as description
             lines = content.strip().split("\n")
             desc = ""
@@ -176,7 +275,7 @@ def reset_agent(agent_name: str, source_agent: str | None = None) -> None:
             )
             return
 
-        source_content = source_md.read_text()
+        source_content = source_md.read_text(encoding='utf-8')
         action_desc = f"contents of agent '{source_agent}'"
     else:
         source_content = get_default_coding_instructions()
@@ -677,6 +776,12 @@ def create_agent_with_config(
             SharedMemoryMiddleware(author_id="main-agent"),
         ]
 
+    # Build named subagents from all available agents
+    named_subagents = build_named_subagents(
+        assistant_id=assistant_id,
+        tools=tools,
+    )
+
     # Get the system prompt (sandbox-aware and with skills)
     system_prompt = get_system_prompt(
         assistant_id=assistant_id, sandbox_type=sandbox_type
@@ -684,6 +789,8 @@ def create_agent_with_config(
 
     interrupt_on = _add_interrupt_on()
 
+    # Pass named_subagents directly to create_deep_agent
+    # It will create the SubAgentMiddleware internally
     agent = create_deep_agent(
         model=wrapped_model,
         system_prompt=system_prompt,
@@ -693,6 +800,7 @@ def create_agent_with_config(
         middleware=agent_middleware,
         store=store,
         interrupt_on=interrupt_on,  # type: ignore
+        subagents=named_subagents,  # Pass named agents as subagents # type: ignore
     ).with_config(
         config  # type: ignore
     )
