@@ -37,6 +37,7 @@ from langgraph.store.memory import InMemoryStore
 from langchain.agents.middleware import (
     InterruptOnConfig,
 )
+from namicode_cli.default_subagents.subagents import retrieve_core_subagents
 from langchain.agents.middleware.types import AgentState
 from langchain.messages import ToolCall
 from langchain.tools import BaseTool
@@ -191,7 +192,7 @@ def build_named_subagents(
 
         # Add color to subagent if available
         if agent_color:
-            subagent["color"] = agent_color # type: ignore
+            subagent["color"] = agent_color  # type: ignore
 
         subagents.append(subagent)
 
@@ -239,7 +240,7 @@ def list_agents() -> None:
         # Check for agent.md existence and show summary
         agent_md = agent_path / "agent.md"
         if agent_md.exists():
-            content = agent_md.read_text(encoding='utf-8')
+            content = agent_md.read_text(encoding="utf-8")
             # Extract first line or first sentence as description
             lines = content.strip().split("\n")
             desc = ""
@@ -275,7 +276,7 @@ def reset_agent(agent_name: str, source_agent: str | None = None) -> None:
             )
             return
 
-        source_content = source_md.read_text(encoding='utf-8')
+        source_content = source_md.read_text(encoding="utf-8")
         action_desc = f"contents of agent '{source_agent}'"
     else:
         source_content = get_default_coding_instructions()
@@ -306,7 +307,7 @@ def get_system_prompt(assistant_id: str, sandbox_type: str | None = None) -> str
                      If None, agent is operating in local mode.
 
     Returns:
-        The system prompt string (without agent.md content)
+        The system prompt string (without NAMI.md content)
     """
     agent_dir_path = f"~/.nami/{assistant_id}"
 
@@ -376,6 +377,21 @@ The filesystem backend is currently operating in: `{cwd}`
 - Be specific: "FastAPI JWT auth 2025" not "auth"
 - Synthesize results; never show raw JSON to user
 - Cite sources when relevant
+
+### Sandbox Execution (E2B)
+
+Use `execute_in_e2b` for secure, isolated code execution:
+- **Testing code before writing**: Verify code works before committing to files
+- **Running untrusted code**: Execute user-provided code safely
+- **Skill reference scripts**: Run scripts from skills in isolated environment
+- **Package testing**: Install and test packages (pip, npm) without affecting local system
+- **Network requests**: Execute code that makes HTTP calls or API requests
+
+**Languages supported**: Python, Node.js, JavaScript, Bash
+**Sandboxes** are fully isolated from the local system with automatic cleanup
+**Package managers** (pip, npm) work automatically - just use them in your code
+
+**Example**: `execute_in_e2b(code="import requests\\nprint(requests.__version__)", language="python")`
 
 ## Error Recovery
 
@@ -660,6 +676,8 @@ def create_agent_with_config(
         2-tuple of (graph, backend)
     """
     tracing_enabled = False
+    Nami_SubAgent: list[SubAgent] = []
+
     if is_tracing_enabled():
         tracing_enabled = True
         tracing_config = get_tracing_config()
@@ -776,11 +794,18 @@ def create_agent_with_config(
             SharedMemoryMiddleware(author_id="main-agent"),
         ]
 
+    # Default core-nami-subagents
+    default_subagents = retrieve_core_subagents(tools=tools)
+    Nami_SubAgent.extend(
+        default_subagents
+    )  # Use extend to add all subagents individually
+
     # Build named subagents from all available agents
     named_subagents = build_named_subagents(
         assistant_id=assistant_id,
         tools=tools,
     )
+    Nami_SubAgent.extend(named_subagents)  # type: ignore
 
     # Get the system prompt (sandbox-aware and with skills)
     system_prompt = get_system_prompt(
@@ -800,7 +825,7 @@ def create_agent_with_config(
         middleware=agent_middleware,
         store=store,
         interrupt_on=interrupt_on,  # type: ignore
-        subagents=named_subagents,  # Pass named agents as subagents # type: ignore
+        subagents=Nami_SubAgent,  # Pass named agents as subagents # type: ignore
     ).with_config(
         config  # type: ignore
     )

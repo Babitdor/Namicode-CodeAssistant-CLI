@@ -7,22 +7,27 @@ Key Tools:
 - http_request(): Make HTTP requests to APIs and web services
 - fetch_url(): Fetch web pages and convert HTML to markdown
 - web_search(): Search the web using Tavily API
+- execute_in_e2b(): Execute code in isolated E2B cloud sandboxes
 
 These tools are registered with the agent and allow it to:
 - Fetch data from REST APIs
 - Scrape web content and convert to readable markdown
 - Search for current information online
 - Handle various HTTP methods (GET, POST, PUT, DELETE, etc.)
+- Run Python, Node.js, and Bash code securely in isolated environments
 
 Dependencies:
 - requests: HTTP client library
 - markdownify: HTML to markdown conversion
 - tavily: Web search API client
+- e2b-code-interpreter: E2B sandbox execution
 
 The Tavily client is initialized if TAVILY_API_KEY is available in settings.
 """
 
 import difflib
+import json
+import os
 import subprocess
 import tempfile
 from pathlib import Path
@@ -209,3 +214,136 @@ def fetch_url(url: str, timeout: int = 30) -> dict[str, Any]:
         }
     except Exception as e:
         return {"error": f"Fetch URL error: {e!s}", "url": url}
+
+
+def execute_in_e2b(
+    code: str,
+    language: str = "python",
+    files: str | None = None,
+    timeout: int = 60,
+) -> str:
+    """Execute code in isolated E2B cloud sandbox.
+
+    Use this tool to run Python, Node.js, or Bash code in a secure, isolated
+    cloud environment. Perfect for:
+    - Testing code snippets before committing
+    - Running untrusted or experimental code safely
+    - Executing skill reference scripts
+    - Installing and testing packages (pip, npm)
+    - Running code that requires network access
+
+    The sandbox is fully isolated from the local system with automatic cleanup.
+    Package managers (pip, npm) work automatically within the sandbox.
+
+    Args:
+        code: The code to execute (as a string)
+        language: Runtime to use - "python", "nodejs", "javascript", or "bash" (default: "python")
+        files: Optional JSON string of files to upload before execution.
+               Format: '{"filename1": "content1", "filename2": "content2"}'
+               Files will be available in the sandbox filesystem.
+        timeout: Maximum execution time in seconds (default: 60, max: 300)
+
+    Returns:
+        Formatted string with execution results including:
+        - Standard output from the code
+        - Standard error (if any)
+        - Exit code
+        - Execution time
+        - Error messages (if execution failed)
+
+    Examples:
+        # Run Python code
+        execute_in_e2b(code="print('Hello from E2B')", language="python")
+
+        # Install and use a package
+        execute_in_e2b(
+            code="import subprocess\\nsubprocess.run(['pip', 'install', 'requests'])\\nimport requests\\nprint(requests.__version__)",
+            language="python"
+        )
+
+        # Run with uploaded files
+        execute_in_e2b(
+            code="with open('data.txt') as f: print(f.read())",
+            language="python",
+            files='{"data.txt": "Hello World"}'
+        )
+
+        # Run Node.js
+        execute_in_e2b(code="console.log(process.version)", language="nodejs")
+
+    Note: Requires E2B_API_KEY to be configured. Set it with:
+          nami secrets set e2b_api_key
+          Or set environment variable: export E2B_API_KEY=your-key-here
+    """
+    # Lazy import to avoid dependency issues if e2b not installed
+    try:
+        from namicode_cli.integrations.e2b_executor import (
+            E2BExecutor,
+            format_e2b_result,
+        )
+    except ImportError as e:
+        return (
+            f"Error: E2B Code Interpreter SDK not installed: {e}\n\n"
+            "Install it with: pip install e2b-code-interpreter"
+        )
+
+    # Check for API key in SecretManager or environment
+    from namicode_cli.onboarding import SecretManager
+
+    secret_manager = SecretManager()
+    api_key = secret_manager.get_secret("e2b_api_key") or os.environ.get("E2B_API_KEY")
+
+    if not api_key:
+        return (
+            "Error: E2B_API_KEY not configured.\n\n"
+            "To set up E2B sandbox execution:\n"
+            "1. Sign up at https://e2b.dev and create an API key\n"
+            "2. Configure it with: nami secrets set e2b_api_key\n"
+            "   Or set environment variable: export E2B_API_KEY=your-key-here\n\n"
+            "E2B provides isolated cloud sandboxes for secure code execution."
+        )
+
+    # Validate timeout
+    if timeout > 300:  # noqa: PLR2004
+        timeout = 300
+        timeout_warning = "\nWarning: Timeout capped at 300 seconds (5 minutes)\n"
+    else:
+        timeout_warning = ""
+
+    # Parse files if provided
+    file_list = None
+    if files:
+        try:
+            files_dict = json.loads(files)
+            file_list = [(path, content) for path, content in files_dict.items()]
+        except json.JSONDecodeError as e:
+            return f'Error: Invalid JSON in files parameter: {e}\n\nExpected format: {{"filename": "content", ...}}'
+
+    # Execute code in sandbox
+    try:
+        executor = E2BExecutor(api_key=api_key)
+        result = executor.execute(
+            code=code,
+            language=language,
+            files=file_list,
+            timeout=timeout,
+        )
+
+        # Format result for LLM
+        formatted = format_e2b_result(result)
+
+        # Add timeout warning if applicable
+        if timeout_warning:
+            formatted = timeout_warning + "\n" + formatted
+
+        return formatted
+
+    except Exception as e:  # noqa: BLE001
+        return (
+            f"Error: Failed to execute code in E2B sandbox: {e}\n\n"
+            "This may be due to:\n"
+            "- Invalid API key\n"
+            "- Network connectivity issues\n"
+            "- E2B service unavailable\n\n"
+            f"Error details: {e!s}"
+        )

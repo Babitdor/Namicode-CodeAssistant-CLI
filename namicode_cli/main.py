@@ -73,6 +73,7 @@ from namicode_cli.path_approval import check_path_approval, PathApprovalManager
 from namicode_cli.skills import execute_skills_command, setup_skills_parser
 from namicode_cli.mcp.commands import execute_mcp_command, setup_mcp_parser
 from namicode_cli.tools import (
+    execute_in_e2b,
     fetch_url,
     http_request,
     web_search,
@@ -743,6 +744,7 @@ async def _run_agent_session(
     tools = [
         http_request,
         fetch_url,
+        execute_in_e2b,
         run_tests_tool,
         start_dev_server_tool,
         stop_server_tool,

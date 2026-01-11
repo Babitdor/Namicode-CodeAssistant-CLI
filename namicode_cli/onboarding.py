@@ -29,6 +29,7 @@ API_KEY_NAMES = {
     "anthropic": "anthropic_api_key",
     "google": "google_api_key",
     "groq": "groq_api_key",
+    "e2b": "e2b_api_key",
 }
 
 
@@ -222,10 +223,13 @@ class OnboardingWizard:
         # Step 3: Get Tavily API key (optional - can skip for now)
         tavily_key = self._prompt_tavily_key()
 
-        # Step 4: Test connections
+        # Step 4: Get E2B API key (optional - can skip for now)
+        e2b_key = self._prompt_e2b_key()
+
+        # Step 5: Test connections
         console.print()
         console.print("[bold]Testing connections:[/bold]")
-        if not self._test_connections(provider, provider_config, tavily_key):
+        if not self._test_connections(provider, provider_config, tavily_key, e2b_key):
             console.print()
             console.print(
                 "[yellow]⚠ Connection tests failed. "
@@ -235,7 +239,7 @@ class OnboardingWizard:
             if response != "y":
                 return False
 
-        # Step 5: Save configuration
+        # Step 6: Save configuration
         self._save_config(provider, provider_config, tavily_key)
 
         console.print()
@@ -321,15 +325,38 @@ class OnboardingWizard:
 
         return None
 
+    def _prompt_e2b_key(self) -> str | None:
+        """Prompt for E2B Sandbox API key (optional).
+
+        Returns:
+            E2B API key or None if skipped
+        """
+        console.print()
+        console.print("[bold]Sandbox execution provider (E2B):[/bold]")
+        console.print("  [dim]Required for secure code execution. Press Enter to skip.[/dim]")
+        console.print("  [dim]Get your free API key at: https://e2b.dev[/dim]")
+        e2b_key = prompt("  E2B API key: ", is_password=True).strip()
+
+        if e2b_key:
+            self.secret_manager.store_secret(API_KEY_NAMES["e2b"], e2b_key)
+            return e2b_key
+
+        return None
+
     def _test_connections(
-        self, provider: str, provider_config: dict[str, Any], tavily_key: str | None
+        self,
+        provider: str,
+        provider_config: dict[str, Any],
+        tavily_key: str | None,
+        e2b_key: str | None,
     ) -> bool:
-        """Test connections to LLM provider and Tavily.
+        """Test connections to LLM provider, Tavily, and E2B.
 
         Args:
             provider: Provider name
             provider_config: Provider configuration
             tavily_key: Tavily API key (optional)
+            e2b_key: E2B API key (optional)
 
         Returns:
             True if all tests passed, False otherwise
@@ -377,6 +404,24 @@ class OnboardingWizard:
                 # Simple test query
                 _ = client.search("test", max_results=1)
                 console.print("[green]✓[/green]")
+            except Exception as e:  # noqa: BLE001
+                console.print(f"[red]✗ ({e})[/red]")
+                all_passed = False
+
+        # Test E2B if key provided
+        if e2b_key:
+            console.print("  → Testing E2B sandbox connection... ", end="")
+            try:
+                from namicode_cli.integrations.e2b_executor import E2BExecutor
+
+                executor = E2BExecutor(api_key=e2b_key)
+                # Simple test execution
+                result = executor.execute("print('test')", language="python", timeout=10)
+                if result.exit_code == 0:
+                    console.print("[green]✓[/green]")
+                else:
+                    console.print(f"[red]✗ (exit code {result.exit_code})[/red]")
+                    all_passed = False
             except Exception as e:  # noqa: BLE001
                 console.print(f"[red]✗ ({e})[/red]")
                 all_passed = False

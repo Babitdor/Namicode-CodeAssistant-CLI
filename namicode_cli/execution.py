@@ -217,7 +217,7 @@ def prompt_for_tool_approval(
     return {"type": "auto_approve_all"}
 
 
-async def execute_task(
+async def execute_task( # type: ignore
     user_input: str,
     agent,
     assistant_id: str | None,

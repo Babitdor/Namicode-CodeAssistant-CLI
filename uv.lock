@@ -624,12 +624,56 @@ wheels = [
 ]
 
 [[package]]
+name = "dockerfile-parse"
+version = "2.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/92/df/929ee0b5d2c8bd8d713c45e71b94ab57c7e11e322130724d54f469b2cd48/dockerfile-parse-2.0.1.tar.gz", hash = "sha256:3184ccdc513221983e503ac00e1aa504a2aa8f84e5de673c46b0b6eee99ec7bc", size = 24556, upload-time = "2023-07-18T13:36:07.897Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7a/6c/79cd5bc1b880d8c1a9a5550aa8dacd57353fa3bb2457227e1fb47383eb49/dockerfile_parse-2.0.1-py2.py3-none-any.whl", hash = "sha256:bdffd126d2eb26acf1066acb54cb2e336682e1d72b974a40894fac76a4df17f6", size = 14845, upload-time = "2023-07-18T13:36:06.052Z" },
+]
+
+[[package]]
 name = "docstring-parser"
 version = "0.17.0"
 source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/b2/9d/c3b43da9515bd270df0f80548d9944e389870713cc1fe2b8fb35fe2bcefd/docstring_parser-0.17.0.tar.gz", hash = "sha256:583de4a309722b3315439bb31d64ba3eebada841f2e2cee23b99df001434c912", size = 27442, upload-time = "2025-07-21T07:35:01.868Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/55/e2/2537ebcff11c1ee1ff17d8d0b6f4db75873e3b0fb32c2d4a2ee31ecb310a/docstring_parser-0.17.0-py3-none-any.whl", hash = "sha256:cf2569abd23dce8099b300f9b4fa8191e9582dda731fd533daf54c4551658708", size = 36896, upload-time = "2025-07-21T07:35:00.684Z" },
+]
+
+[[package]]
+name = "e2b"
+version = "2.9.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "dockerfile-parse" },
+    { name = "httpcore" },
+    { name = "httpx" },
+    { name = "packaging" },
+    { name = "protobuf" },
+    { name = "python-dateutil" },
+    { name = "rich" },
+    { name = "typing-extensions" },
+    { name = "wcmatch" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/a5/2c/1aff591d43d4dae2ba847d83398f43e826b66d29cdfab83a2d9ce6ca7ced/e2b-2.9.1.tar.gz", hash = "sha256:62240416a211e71e6143c5b346b9e64f34c42e68ad743d0aa27a9a3b2b47f359", size = 111753, upload-time = "2026-01-09T22:41:45.925Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/6a/b8/00b2289909b6e0e7137aea17537b34079c522f639dc38066150ff5054083/e2b-2.9.1-py3-none-any.whl", hash = "sha256:b02b69bb714e2435b8696c87f3a84398599ae5e25c1c096ed58fa43a9eab093d", size = 204163, upload-time = "2026-01-09T22:41:44.094Z" },
+]
+
+[[package]]
+name = "e2b-code-interpreter"
+version = "2.4.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "attrs" },
+    { name = "e2b" },
+    { name = "httpx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/1e/eb/db6e51edd9f3402fd68d026572579b9b1bd833b10d990376a1e4c05d5b8d/e2b_code_interpreter-2.4.1.tar.gz", hash = "sha256:4b15014ee0d0dfcdc3072e1f409cbb87ca48f48d53d75629b7257e5513b9e7dd", size = 10700, upload-time = "2025-11-26T18:12:38.086Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/1b/e7/09b9106ead227f7be14bd97c3181391ee498bb38933b1a9c566b72c8567a/e2b_code_interpreter-2.4.1-py3-none-any.whl", hash = "sha256:15d35f025b4a15033e119f2e12e7ac65657ad2b5a013fa9149e74581fbee778a", size = 13719, upload-time = "2025-11-26T18:12:36.7Z" },
 ]
 
 [[package]]
@@ -1613,11 +1657,12 @@ test = [
 
 [[package]]
 name = "namicode-cli"
-version = "0.0.10"
+version = "0.0.13"
 source = { editable = "." }
 dependencies = [
     { name = "daytona" },
     { name = "docker" },
+    { name = "e2b-code-interpreter" },
     { name = "keyring" },
     { name = "langchain" },
     { name = "langchain-google-genai" },
@@ -1644,6 +1689,7 @@ dependencies = [
 requires-dist = [
     { name = "daytona", specifier = ">=0.113.0" },
     { name = "docker", specifier = ">=7.0.0" },
+    { name = "e2b-code-interpreter", specifier = ">=1.0.0" },
     { name = "keyring", specifier = ">=24.0.0" },
     { name = "langchain", specifier = ">=1.0.7" },
     { name = "langchain-google-genai", specifier = ">=3.2.0" },
