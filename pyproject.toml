@@ -1,12 +1,26 @@
 [build-system]
-requires = ["setuptools>=73.0.0", "wheel"]
+requires = ["setuptools >= 77.0.3"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "namicode-cli"
-version = "0.0.10"
-requires-python = ">=3.11,<4.0"
+version = "0.0.13"
+description = "Agentic Coding Tool that runs in your terminal"
+authors = [{ name = "Babitdor", email = "babitdorbryan14@gmail.com" }]
+readme = {file = "README.md", content-type = "text/markdown"}
+license = { text = "MIT" }
+keywords = ["nami", "code-cli", "nami-code", "agentic-code-cli"]
 
+requires-python = ">=3.11,<4.0"
+classifiers = [
+     "Development Status :: 3 - Alpha",
+     "Intended Audience :: Developers",
+     "License :: OSI Approved :: MIT License",
+     "Programming Language :: Python :: 3.11",
+     "Programming Language :: Python :: 3.12",
+     "Programming Language :: Python :: 3.13",
+     "Framework :: LangChain-DeepAgents",
+ ]
 dependencies = [
     "nami-deepagents>=0.2.8",
     "requests",
@@ -31,6 +45,12 @@ dependencies = [
     "nest-asyncio>=1.6.0",
     "pillow"
 ]
+
+[project.urls]
+    Homepage = "https://github.com/Babitdor/namicode"
+    Repository = "https://github.com/Babitdor/namicode"
+    Issues = "https://github.com/Babitdor/namicode/issues"
+    Changelog = "https://github.com/Babitdor/Namicode/blob/main/CHANGELOG.md"
 
 [project.scripts]
 nami = "namicode_cli.main:cli_main"
