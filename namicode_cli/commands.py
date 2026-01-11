@@ -650,10 +650,14 @@ async def _handle_model_command() -> bool:
                         from namicode_cli.onboarding import SecretManager
 
                         secret_manager = SecretManager()
-                        api_key_name = preset["api_key_var"].lower()  # e.g., OPENAI_API_KEY -> openai_api_key
+                        api_key_name = preset[
+                            "api_key_var"
+                        ].lower()  # e.g., OPENAI_API_KEY -> openai_api_key
 
                         # Check if API key exists in keyring or environment
-                        api_key = secret_manager.get_secret(api_key_name) or os.environ.get(preset["api_key_var"])
+                        api_key = secret_manager.get_secret(
+                            api_key_name
+                        ) or os.environ.get(preset["api_key_var"])
 
                         if not api_key:
                             # Prompt user to provide API key
@@ -662,7 +666,9 @@ async def _handle_model_command() -> bool:
                                 f"[yellow]⚠ {preset['name']} requires an API key to proceed[/yellow]"
                             )
                             console.print()
-                            console.print(f"[bold]Enter {preset['name']} API key:[/bold]")
+                            console.print(
+                                f"[bold]Enter {preset['name']} API key:[/bold]"
+                            )
                             console.print(
                                 f"[dim]This will be stored securely in your system keychain[/dim]"
                             )
@@ -677,7 +683,9 @@ async def _handle_model_command() -> bool:
 
                             if not new_api_key:
                                 console.print()
-                                console.print("[yellow]⚠ No API key provided, cancelled[/yellow]")
+                                console.print(
+                                    "[yellow]⚠ No API key provided, cancelled[/yellow]"
+                                )
                                 console.print()
                                 return True
 
@@ -1538,6 +1546,33 @@ async def _skills_list_interactive(ps, settings, assistant_id: str) -> bool:
     return True
 
 
+# Helper to extract descriptions
+def extract_agent_description(agent_md: Path) -> str:
+    try:
+        content = agent_md.read_text(encoding="utf-8")
+
+        # YAML front-matter
+        if content.startswith("---"):
+            parts = content.split("---", 2)
+            if len(parts) >= 3:
+                front_matter = parts[1]
+                for line in front_matter.splitlines():
+                    line = line.strip()
+                    if line.startswith("description:"):
+                        return line.split(":", 1)[1].strip()[:80]
+
+        # Fallback: first non-empty, non-heading line
+        for line in content.splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                return (line[:80] + "...") if len(line) > 80 else line
+
+    except Exception:
+        pass
+
+    return "[unable to read]"
+
+
 async def _agents_list(settings) -> bool:
     """List all available custom agents from both global and project scopes.
 
@@ -1567,19 +1602,20 @@ async def _agents_list(settings) -> bool:
     for agent_name, agent_dir, scope in all_agents:
         agent_md = agent_dir / "agent.md"
         # Read first non-empty line for description
-        try:
-            content = agent_md.read_text(encoding="utf-8")
-            lines = content.split("\n")
-            description = ""
-            for line in lines:
-                line = line.strip()
-                if line and not line.startswith("#"):
-                    description = line[:80]
-                    if len(line) > 80:
-                        description += "..."
-                    break
-        except Exception:
-            description = "[unable to read]"
+        description = extract_agent_description(agent_md)
+        # try:
+        #     content = agent_md.read_text(encoding="utf-8")
+        #     lines = content.split("\n")
+        #     description = ""
+        #     for line in lines:
+        #         line = line.strip()
+        #         if line and not line.startswith("#"):
+        #             description = line[:80]
+        #             if len(line) > 80:
+        #                 description += "..."
+        #             break
+        # except Exception:
+        #     description = "[unable to read]"
 
         if scope == "project":
             project_agents.append((agent_name, description, agent_dir))
@@ -1837,6 +1873,7 @@ async def _agents_create_interactive(ps, settings) -> bool:
     # Add YAML frontmatter with color
     final_content = f"""---
 color: {agent_color}
+description: {description}
 ---
 
 {system_prompt}"""
