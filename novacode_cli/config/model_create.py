@@ -15,6 +15,39 @@ PROVIDER_KEY_ENV: dict[str, str] = {
 }
 
 
+#: Stable for the life of the process — see :func:`opencode_session_id`.
+_OPENCODE_SESSION_ID: str | None = None
+
+
+def opencode_session_id() -> str:
+    """The ``x-opencode-session`` value for the OpenCode Go gateway.
+
+    The gateway rejects requests that omit this header (400 ``MissingSessionID``,
+    "cannot be routed efficiently"), and uses it to route and to key prompt
+    caching. It must therefore stay *stable across a conversation* rather than
+    change per request — a fresh id per call would defeat the cache it exists to
+    enable, which is presumably why the gateway refuses to serve without one.
+
+    One id per Nova process. That is the honest granularity available here: the
+    chat client is constructed once with fixed headers, well before any session
+    is chosen, and it outlives session switches. A Nova run is close enough to
+    one conversation for routing and caching to work.
+
+    Set ``OPENCODE_SESSION_ID`` to pin it — across restarts (so a resumed
+    session keeps its cache) or per pane if you run parallel sessions and want
+    them cached separately.
+    """
+    global _OPENCODE_SESSION_ID
+    pinned = os.environ.get("OPENCODE_SESSION_ID", "").strip()
+    if pinned:
+        return pinned
+    if _OPENCODE_SESSION_ID is None:
+        import uuid
+
+        _OPENCODE_SESSION_ID = f"nova-{uuid.uuid4().hex}"
+    return _OPENCODE_SESSION_ID
+
+
 def build_chat_model(provider: str, model_name: str) -> BaseChatModel:
     """THE model constructor — every ChatX(...) in Nova is built here.
 
@@ -91,6 +124,11 @@ def build_chat_model(provider: str, model_name: str) -> BaseChatModel:
             openai_kwargs["api_key"] = settings.opencode_api_key or os.environ.get(
                 "OPENCODE_API_KEY"
             )
+            # The gateway REJECTS requests without this header — every call
+            # fails with 400 MissingSessionID — so it is not optional.
+            openai_kwargs["default_headers"] = {
+                "x-opencode-session": opencode_session_id()
+            }
         else:
             # Plain OpenAI: same keyring-or-env resolution as the gateways above.
             # Without this, a key held only in the system keychain passed the
