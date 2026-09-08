@@ -29,6 +29,63 @@ def get_active_pipeline() -> VoicePipeline | None:
     return _ACTIVE_PIPELINE
 
 
+def build_stt(provider: str, provider_configs: dict[str, Any] | None = None) -> VoiceSTT:
+    """Create an STT backend by provider name.
+
+    Module-level rather than a :class:`VoicePipeline` method because callers
+    that only transcribe — a remote voice note, say — must not construct a
+    pipeline: doing so installs itself as the process-wide ``_ACTIVE_PIPELINE``
+    and would hijack the live voice session.
+    """
+    cfg = (provider_configs or {}).get(provider, {})
+    if provider == "faster-whisper":
+        from novacode_cli.audio.stt import Transcriber
+
+        return Transcriber(
+            model_size=cfg.get("model", "distil-large-v3"),
+            device=cfg.get("device", "auto"),
+            language=cfg.get("language", "en"),
+        )
+    if provider == "deepgram":
+        from novacode_cli.audio.stt_deepgram import DeepgramTranscriber
+
+        return DeepgramTranscriber(
+            api_key=cfg.get("api_key") or cfg.get("key") or "",
+            model=cfg.get("model", "nova-2"),
+        )
+    if provider == "parakeet":
+        try:
+            import sherpa_onnx  # noqa: F401
+        except ImportError as e:
+            raise ImportError(
+                "The 'sherpa-onnx' package is required for Parakeet STT.\n"
+                "If developer/local install, run: pip install sherpa-onnx\n"
+                "If global uv tool install, run: uv tool install --with sherpa-onnx novacode-cli --reinstall"
+            ) from e
+
+        from novacode_cli.audio.stt_parakeet import ParakeetTranscriber
+
+        return ParakeetTranscriber(
+            num_threads=cfg.get("threads", 2),
+        )
+    msg = f"Unknown STT provider: {provider!r}"
+    raise ValueError(msg)
+
+
+def stt_from_voice_config(cfg: dict[str, Any]) -> VoiceSTT:
+    """Build the STT backend described by a saved ``/voice`` config block.
+
+    Applies the same legacy-key merge :class:`VoicePipeline` does, so a voice
+    note is transcribed by whatever provider and model the user selected rather
+    than by a second, silently different default.
+    """
+    provider_configs = {k: dict(v) for k, v in (cfg.get("providers") or {}).items()}
+    whisper = provider_configs.setdefault("faster-whisper", {})
+    whisper.setdefault("model", cfg.get("stt_model", "base"))
+    whisper.setdefault("device", cfg.get("stt_device", "auto"))
+    return build_stt(cfg.get("stt_provider", "faster-whisper"), provider_configs)
+
+
 class VoicePipeline:
     """High-level voice I/O: one-shot capture, continuous listen, and speak."""
 
@@ -81,40 +138,7 @@ class VoicePipeline:
 
     def _build_stt(self) -> VoiceSTT:
         """Create the STT provider selected by ``stt_provider``."""
-        provider = self._stt_provider
-        cfg = self._provider_configs.get(provider, {})
-        if provider == "faster-whisper":
-            from novacode_cli.audio.stt import Transcriber
-
-            return Transcriber(
-                model_size=cfg.get("model", "distil-large-v3"),
-                device=cfg.get("device", "auto"),
-                language=cfg.get("language", "en"),
-            )
-        if provider == "deepgram":
-            from novacode_cli.audio.stt_deepgram import DeepgramTranscriber
-
-            return DeepgramTranscriber(
-                api_key=cfg.get("api_key") or cfg.get("key") or "",
-                model=cfg.get("model", "nova-2"),
-            )
-        if provider == "parakeet":
-            try:
-                import sherpa_onnx  # noqa: F401
-            except ImportError as e:
-                raise ImportError(
-                    "The 'sherpa-onnx' package is required for Parakeet STT.\n"
-                    "If developer/local install, run: pip install sherpa-onnx\n"
-                    "If global uv tool install, run: uv tool install --with sherpa-onnx novacode-cli --reinstall"
-                ) from e
-
-            from novacode_cli.audio.stt_parakeet import ParakeetTranscriber
-
-            return ParakeetTranscriber(
-                num_threads=cfg.get("threads", 2),
-            )
-        msg = f"Unknown STT provider: {provider!r}"
-        raise ValueError(msg)
+        return build_stt(self._stt_provider, self._provider_configs)
 
     def _build_tts(self) -> VoiceTTS:
         """Create the TTS provider selected by ``tts_provider``."""

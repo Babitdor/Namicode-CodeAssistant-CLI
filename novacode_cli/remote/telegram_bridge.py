@@ -221,8 +221,12 @@ class TelegramBridge:
                     from_user = message.get("from", {})
                     user_name = from_user.get("username") or from_user.get("first_name", "unknown")
                     text = (message.get("text") or "").strip()
+                    # A voice note carries no `text`; it is transcribed below,
+                    # AFTER the allowlist check, so an unauthorized chat can
+                    # never make us fetch and decode a file.
+                    voice = message.get("voice") or {}
 
-                    if not text or chat_id is None:
+                    if chat_id is None or (not text and not voice):
                         continue
 
                     # Only process messages from the allowlisted chat.
@@ -235,6 +239,11 @@ class TelegramBridge:
                         msg_thread_id = message.get("message_thread_id")
                         if msg_thread_id != self._forum_thread_id:
                             continue
+
+                    if not text:
+                        text = await self._transcribe_voice(chat_id, voice)
+                        if not text:
+                            continue  # nothing usable; the sender was told why
 
                     logger.info(
                         f"Telegram message from {user_name}: "
@@ -349,6 +358,73 @@ class TelegramBridge:
             if self._session and not self._session.closed:
                 await self._session.close()
             logger.info("Telegram bridge stopped")
+
+    async def _download_file(self, file_id: str) -> bytes | None:
+        """Fetch a Telegram file's bytes by ``file_id`` (two-step: getFile, GET)."""
+        info = await self._api_call("getFile", {"file_id": file_id})
+        file_path = (info or {}).get("result", {}).get("file_path")
+        if not file_path:
+            return None
+        url = f"{_TELEGRAM_API}/file/bot{self._config.token}/{file_path}"
+        try:
+            session = self._ensure_session()
+            async with session.get(url) as resp:
+                if resp.status != 200:  # noqa: PLR2004
+                    logger.error("Telegram file download failed: HTTP %s", resp.status)
+                    return None
+                return await resp.read()
+        except Exception as e:  # noqa: BLE001 — a bad download must not kill the poll loop
+            logger.error(f"Telegram file download error: {e}")
+            return None
+
+    async def _transcribe_voice(self, chat_id: int, voice: dict[str, Any]) -> str:
+        """Transcribe a voice note, or explain to the sender why it could not be.
+
+        Every failure path replies. The sender is on a phone, not at the
+        terminal: a voice note that vanishes silently is indistinguishable from
+        a dead bot, so "I could not hear that" is itself the feature.
+        """
+        from novacode_cli.remote.voice_notes import (
+            VoiceNotesUnavailable,
+            VoiceNoteTooLong,
+            transcribe_voice_note,
+        )
+
+        file_id = voice.get("file_id")
+        if not file_id:
+            return ""
+
+        # Transcribing is slow enough to look like a hang; show activity first.
+        await self._trigger_typing(chat_id)
+
+        data = await self._download_file(file_id)
+        if not data:
+            await self._send_message(chat_id, "🎙 Could not download that voice note.")
+            return ""
+
+        try:
+            text = await transcribe_voice_note(data, duration=voice.get("duration"))
+        except (VoiceNotesUnavailable, VoiceNoteTooLong) as e:
+            await self._send_message(chat_id, f"🎙 {e}")
+            return ""
+        except Exception:
+            # Never kill the poll loop: one bad clip must not stop every later
+            # message from being answered.
+            logger.exception("Voice note transcription failed")
+            await self._send_message(chat_id, "🎙 Could not transcribe that voice note.")
+            return ""
+
+        if not text:
+            await self._send_message(
+                chat_id, "🎙 I could not make out any speech in that note."
+            )
+            return ""
+
+        # Echo what was heard before acting on it. Transcription is fallible,
+        # and a wrong transcript that silently becomes a prompt is worse than a
+        # visible one the sender can correct.
+        await self._send_message(chat_id, f"🎙 “{text}”")
+        return text
 
     async def _trigger_typing(self, chat_id: int) -> None:
         """Send a 'typing' chat action to Telegram."""

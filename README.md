@@ -59,7 +59,7 @@ An open-source, terminal-based AI coding assistant built on LangGraph and the `d
 
 ### Infrastructure
 - **Session Management**: Save, restore, auto-save, and resume sessions. Compact conversation history via `/compact`
-- **Remote Bridges**: Discord and Telegram integration for remote agent interaction
+- **Remote Bridges**: Discord and Telegram integration for remote agent interaction. Telegram accepts **voice notes** — they're transcribed with your configured `/voice` STT provider and sent to the agent as an ordinary prompt (the transcript is echoed back so you can see what was heard)
 - **Vixie Desktop Companion**: Background server for desktop notifications and system tray integration
 - **Hooks System**: Lifecycle hooks at key points (pre/post tool call, on message, on error) — shell commands or Python scripts
 - **Process Manager**: Subprocess lifecycle, health checks, and cleanup for dev servers and background tasks
