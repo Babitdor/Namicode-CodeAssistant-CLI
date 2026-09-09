@@ -793,6 +793,9 @@ class NovaApp(App):
         # Live status state (animated spinner + elapsed while a turn runs).
         self._activity = "ready"
         self._turn_active = False
+        # The in-flight remote-bridge turn, if any. Held so escape can cancel
+        # that turn without cancelling the consumer loop that received it.
+        self._remote_turn_task: asyncio.Task | None = None
         # Set while a Ctrl+B detach cancels the turn, so the CancelledError path
         # shows a "moved to background" note instead of "Cancelled."
         self._detach_cancelling = False
@@ -3468,6 +3471,15 @@ class NovaApp(App):
             self._set_status("cancelling…")
             return
 
+        # A turn started from a remote bridge runs inside the "remote" consumer
+        # worker, not the "turn" group, so the group cancel below never reached
+        # it — escape did nothing for a Telegram/Discord-triggered turn. Cancel
+        # the tracked task instead of the group: the group cancel would take the
+        # message loop with it and detach the bridge.
+        remote_turn = getattr(self, "_remote_turn_task", None)
+        if remote_turn is not None and not remote_turn.done():
+            remote_turn.cancel()
+
         # Cancel only the turn (and speech), NOT every worker: cancel_all() would
         # also kill the supervisor's child-output readers and the remote consumer,
         # silently detaching every background session.
@@ -4656,7 +4668,8 @@ class NovaApp(App):
                         # While the turn runs, drain further remote messages as
                         # live steers so the user can "add to the previous prompt".
                         steer_drain = asyncio.create_task(self._remote_steer_drain(queue))
-                        try:
+
+                        async def _run_remote_turn() -> None:
                             if isinstance(prompt_text, str):
                                 await self._stream_prompt(prompt_text)
                             elif callable(prompt_text):
@@ -4668,7 +4681,20 @@ class NovaApp(App):
                                     res = prompt_text()
                                     if inspect.iscoroutine(res):
                                         await res
+
+                        # Run the turn as its OWN task so escape can cancel it.
+                        # This consumer lives in the "remote" worker group, which
+                        # action_cancel_turn deliberately does not touch —
+                        # cancelling the group would tear down the message loop
+                        # and silently detach the bridge. Without a separate
+                        # handle there was nothing escape could cancel, so a
+                        # turn started from Telegram/Discord ignored the key.
+                        turn_task = asyncio.create_task(_run_remote_turn())
+                        self._remote_turn_task = turn_task
+                        try:
+                            await turn_task
                         finally:
+                            self._remote_turn_task = None
                             steer_drain.cancel()
                             try:
                                 await steer_drain
