@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 _patched = False
 _fs_host_path_patched = False
 _write_file_content_patched = False
+_reasoning_content_patched = False
 
 
 def apply_write_file_dict_content_patch() -> None:
@@ -298,3 +299,62 @@ def apply_ollama_content_block_patch() -> None:
 
     _patched = True
     logger.debug("Applied Ollama content block + message-conversion patch for file type support")
+
+
+#: Fields a thinking model may return that the API then requires echoed back.
+#: Only ever re-attached when the model actually produced them, so a provider
+#: that has never heard of them is never sent one.
+_REASONING_FIELDS = ("reasoning_content", "reasoning")
+
+
+def apply_openai_reasoning_content_patch() -> None:
+    """Echo ``reasoning_content`` back to OpenAI-compatible thinking models.
+
+    DeepSeek- and GLM-style reasoning models return their chain of thought in a
+    ``reasoning_content`` field beside ``content``, and then REQUIRE it to be
+    sent back with that assistant message on the following turn:
+
+        400 invalid_request_error — "The `reasoning_content` in the thinking
+        mode must be passed back to the API."
+
+    ``langchain_openai._convert_message_to_dict`` emits only role/content/
+    tool_calls, so the field is parsed into ``additional_kwargs`` on the way in
+    and silently dropped on the way out. Any multi-turn conversation with a
+    thinking model — which for an agent means any conversation at all, since a
+    tool call is a second turn — therefore fails on its second request.
+
+    The patch re-attaches the field, and only when the model itself produced it.
+    That guard is what makes this safe to apply to every OpenAI-compatible
+    provider: a model that never returns reasoning_content never gets sent one,
+    so strict endpoints (OpenAI's own) see exactly the payload they see today.
+    """
+    global _reasoning_content_patched
+    if _reasoning_content_patched:
+        return
+
+    try:
+        import langchain_openai.chat_models.base as _oai_base
+    except ImportError:
+        return
+
+    original = getattr(_oai_base, "_convert_message_to_dict", None)
+    if original is None:  # pragma: no cover - upstream renamed it
+        logger.debug("No _convert_message_to_dict to patch; skipping")
+        return
+
+    @functools.wraps(original)
+    def _convert_with_reasoning(message: Any) -> dict:
+        payload = original(message)
+        extra = getattr(message, "additional_kwargs", None)
+        if isinstance(extra, dict) and isinstance(payload, dict):
+            for field in _REASONING_FIELDS:
+                value = extra.get(field)
+                # Empty string / None means "the model returned nothing here";
+                # sending an empty field is not the same as sending the thought.
+                if value and field not in payload:
+                    payload[field] = value
+        return payload
+
+    _oai_base._convert_message_to_dict = _convert_with_reasoning
+    _reasoning_content_patched = True
+    logger.debug("Applied OpenAI reasoning_content round-trip patch")

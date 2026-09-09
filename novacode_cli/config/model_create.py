@@ -100,6 +100,16 @@ def build_chat_model(provider: str, model_name: str) -> BaseChatModel:
     if provider in ("openai", "openrouter", "opencode"):
         from langchain_openai import ChatOpenAI
 
+        from novacode_cli.utils.backend_patches import (
+            apply_openai_reasoning_content_patch,
+        )
+
+        # Thinking models (DeepSeek, GLM) require their reasoning_content to be
+        # sent back on the next turn; LangChain drops it. Applied for every
+        # OpenAI-compatible provider because the patch only acts on messages
+        # that actually carry the field.
+        apply_openai_reasoning_content_patch()
+
         openai_kwargs: dict = {}
         if effort and effort != "off" and ("o1" in model_name or "o3" in model_name):
             openai_kwargs["reasoning_effort"] = effort
