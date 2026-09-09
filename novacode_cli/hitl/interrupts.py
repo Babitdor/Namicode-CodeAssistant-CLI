@@ -119,6 +119,28 @@ INTERRUPT_SPECS: dict[str, InterruptSpec] = {
         ],
         warnings=["Will execute tests and stream output in real-time"],
     ),
+    # Gated for the same reason `shell` is: it runs an arbitrary command with
+    # shell=True. Without an entry here the tool was never considered by
+    # interrupt_on at all, so `daemon(action="start", command=...)` executed
+    # unprompted what `shell(command=...)` would have stopped to ask about —
+    # and left a process running after the session ended. Absence from this
+    # dict fails OPEN, which is the opposite of the policy elsewhere in this
+    # module, so a command-executing tool must always be listed.
+    "daemon": InterruptSpec(
+        fields=[
+            ("action", FieldSpec("Action")),
+            ("name", FieldSpec("Daemon Name")),
+            ("command", FieldSpec("Command", default_display="(none)")),
+            ("cwd", FieldSpec("Working Directory", default_display=str(Path.cwd()))),
+        ],
+        warnings=["Runs detached — it keeps running after Nova exits."],
+    ),
+    "python_kernel": InterruptSpec(
+        fields=[
+            ("code", FieldSpec("Python Code", truncate=2000)),
+        ],
+        static_lines=["Runs in the persistent kernel (namespace survives calls)."],
+    ),
     "start_dev_server": InterruptSpec(
         fields=[
             ("command", FieldSpec("Server Command")),

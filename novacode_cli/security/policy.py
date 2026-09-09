@@ -48,7 +48,20 @@ Tier = Literal["allow", "ask", "deny"]
 # ---------------------------------------------------------------------------
 # Tool groupings — which family of rules a tool is evaluated against.
 # ---------------------------------------------------------------------------
-_SHELL_TOOLS = frozenset({"shell", "execute", "run_tests", "start_dev_server"})
+# Tools whose ``command`` argument is a shell command, and so must be judged by
+# the same allow/deny rules. ``daemon`` belongs here for the reason the others
+# do — it runs its command with shell=True — and doubly so because the process
+# it starts outlives the session. Leaving it out let an agent run through
+# `daemon(action="start", command=...)` exactly what `shell(command=...)` would
+# have denied. Actions without a command (list/status/logs) carry no command to
+# judge and fall through to the tool default.
+_SHELL_TOOLS = frozenset(
+    {"shell", "execute", "run_tests", "start_dev_server", "daemon"}
+)
+#: `daemon` actions that only read state — they start no process and kill
+#: none, so gating them buys nothing and costs approval fatigue.
+_DAEMON_READONLY_ACTIONS = frozenset({"list", "status", "logs"})
+
 _PATH_TOOLS = frozenset({"write_file", "edit_file"})
 _URL_TOOLS = frozenset({"fetch_url"})
 
@@ -212,6 +225,16 @@ class ApprovalPolicy:
         return ApprovalDecision(self.tool_default(tool_name), rule="tool-default")
 
     def _eval_shell(self, tool_name: str, args: dict[str, Any]) -> ApprovalDecision:
+        # `daemon` reaches here for every action, but only `start` carries a
+        # command. Its read-only actions execute nothing, and prompting for
+        # them would train the user to blanket-approve the tool — which is how
+        # a gate stops protecting the action that matters. `stop` is NOT here:
+        # it force-kills a process tree.
+        if tool_name == "daemon":
+            action = str(args.get("action") or "").strip().lower()
+            if action in _DAEMON_READONLY_ACTIONS:
+                return ApprovalDecision("allow", rule="daemon-readonly")
+
         command = str(args.get("command") or "").strip()
         if not command:
             return ApprovalDecision(self.tool_default(tool_name), rule="tool-default")

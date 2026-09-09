@@ -5,9 +5,13 @@ detached daemon), tracks it in a JSON registry under ``~/.nova/daemons/``, and l
 the agent check status, tail logs, and stop it. This is distinct from the
 in-session :class:`~novacode_cli.shell.jobs.BackgroundJob`, which dies with the CLI.
 
-Windows-first (per NOVA.md): the child is spawned with ``DETACHED_PROCESS |
-CREATE_NEW_PROCESS_GROUP`` so it survives the console. On POSIX it uses
-``start_new_session=True``. stdout/stderr are redirected to a per-daemon log file.
+Windows-first (per NOVA.md): the child is spawned with ``CREATE_NO_WINDOW |
+CREATE_NEW_PROCESS_GROUP`` so it survives the console while still being able to
+write to its log — see ``_CREATE_FLAGS`` for why ``DETACHED_PROCESS`` is wrong
+here. On POSIX it uses ``start_new_session=True``, making the child a
+process-group leader; ``stop`` signals that whole group, because with
+``shell=True`` the pid is the shell and the real daemon is its child.
+stdout/stderr are redirected to a per-daemon log file.
 
 This module must NEVER ``console.print`` — it runs inside the live agent loop / TUI.
 """
@@ -25,11 +29,19 @@ from novacode_cli.daemons.registry import (
     DaemonInfo,
     get,
     is_alive,
+    is_ours,
     list_daemons,
     log_path_for,
+    process_created_at,
     register,
+    safe_name,
     unregister,
 )
+
+#: Tail at most this much of a log file. Daemon logs are append-only and never
+#: rotated, so a days-old server's log is routinely hundreds of MB — reading it
+#: whole to show 30 lines would spike memory inside the live agent loop.
+_TAIL_MAX_BYTES = 256 * 1024
 
 #: Windows creation flags that run the child without a console window and in its
 #: own process group. ``CREATE_NO_WINDOW`` (not ``DETACHED_PROCESS``) is used so
@@ -75,9 +87,17 @@ def _tail(path: Path, lines: int = 30) -> str:
     if not path.exists():
         return "(no log file yet)"
     try:
-        text = path.read_text(encoding="utf-8", errors="replace")
+        with path.open("rb") as fh:
+            fh.seek(0, os.SEEK_END)
+            size = fh.tell()
+            fh.seek(max(0, size - _TAIL_MAX_BYTES))
+            raw = fh.read()
     except OSError:
         return "(log unreadable)"
+    text = raw.decode("utf-8", errors="replace")
+    if size > _TAIL_MAX_BYTES:
+        # The window almost certainly starts mid-line; drop that partial line.
+        text = text.split("\n", 1)[-1]
     if not text.strip():
         return "(log is empty)"
     tail = text.splitlines()[-max(1, lines) :]
@@ -133,7 +153,8 @@ def _list_daemons() -> str:
         return "No daemons registered."
     lines = [f"{len(daemons)} daemon(s):"]
     for d in daemons:
-        state = "running" if is_alive(d.pid) else "stopped"
+        # is_ours, not is_alive: a recycled pid would be reported as "running".
+        state = "running" if is_ours(d) else "stopped"
         lines.append(f"  {d.name}  {state}  pid {d.pid}  - {d.command[:60]}")
     return "\n".join(lines)
 
@@ -143,24 +164,40 @@ def _start_daemon(name: str, command: str, cwd: str) -> str:
     if not command.strip():
         return "Error: command is required for start."
     existing = get(name)
-    if existing is not None and is_alive(existing.pid):
+    # is_ours, not is_alive: a recycled pid would otherwise read as "already
+    # running" and block a legitimate restart forever.
+    if existing is not None and is_ours(existing):
         return f"Error: daemon '{name}' is already running (pid {existing.pid})."
     log_path = log_path_for(name)
     try:
         pid = _spawn(command, cwd or str(Path.cwd()), log_path)
     except OSError as exc:
         return f"Error: failed to start daemon: {exc}"
-    register(
-        DaemonInfo(
-            name=name,
-            pid=pid,
-            command=command,
-            log_path=str(log_path),
-            started_at=time.time(),
-            cwd=cwd or str(Path.cwd()),
+    try:
+        register(
+            DaemonInfo(
+                name=name,
+                pid=pid,
+                command=command,
+                log_path=str(log_path),
+                started_at=time.time(),
+                cwd=cwd or str(Path.cwd()),
+                # Captured now so a later stop can tell this process from
+                # whatever inherits its pid.
+                create_time=process_created_at(pid) or 0.0,
+            )
         )
-    )
-    return f"Started daemon '{name}' (pid {pid}). Log: {log_path}"
+    except OSError as exc:
+        # The process is already running; if we cannot record it, say so rather
+        # than reporting success and leaving an untrackable orphan.
+        return (
+            f"Started daemon '{name}' (pid {pid}) but FAILED to register it: "
+            f"{exc}. It is running untracked — stop it manually via pid {pid}."
+        )
+    note = ""
+    if safe_name(name) != name:
+        note = f" (log name sanitized to '{safe_name(name)}')"
+    return f"Started daemon '{name}' (pid {pid}). Log: {log_path}{note}"
 
 
 def _status_daemon(name: str) -> str:
@@ -168,8 +205,9 @@ def _status_daemon(name: str) -> str:
     info = get(name)
     if info is None:
         return f"Daemon '{name}' is not registered."
-    state = "running" if is_alive(info.pid) else "stopped"
-    return f"Daemon '{name}': {state} (pid {info.pid}, started {info.started_at:.0f})."
+    state = "running" if is_ours(info) else "stopped"
+    started = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(info.started_at))
+    return f"Daemon '{name}': {state} (pid {info.pid}, started {started})."
 
 
 def _logs_daemon(name: str, tail_lines: int) -> str:
@@ -185,18 +223,58 @@ def _stop_daemon(name: str) -> str:
     info = get(name)
     if info is None:
         return f"Daemon '{name}' is not registered."
-    if is_alive(info.pid):
-        try:
-            if os.name == "nt":
-                subprocess.run(  # noqa: S603 — terminating a daemon we started
-                    ["taskkill", "/PID", str(info.pid), "/T", "/F"],  # noqa: S607
-                    capture_output=True,
-                    timeout=10,
-                    check=False,
+
+    if not is_alive(info.pid):
+        unregister(name)
+        return f"Daemon '{name}' was not running; removed from the registry."
+
+    # A live pid is NOT proof it is still our daemon — pids are reused and this
+    # registry outlives reboots. Killing on liveness alone would force-kill an
+    # unrelated process tree (`taskkill /T /F`) that merely inherited the number.
+    if not is_ours(info):
+        unregister(name)
+        return (
+            f"Daemon '{name}' is gone — pid {info.pid} now belongs to a different "
+            "process, so nothing was killed. Removed the stale entry."
+        )
+
+    try:
+        if os.name == "nt":
+            proc = subprocess.run(  # noqa: S603 — terminating a daemon we started
+                ["taskkill", "/PID", str(info.pid), "/T", "/F"],  # noqa: S607
+                capture_output=True,
+                timeout=10,
+                check=False,
+            )
+            if proc.returncode != 0 and is_alive(info.pid):
+                detail = (proc.stderr or b"").decode("utf-8", "replace").strip()
+                return (
+                    f"Error: failed to stop daemon '{name}' (pid {info.pid}): "
+                    f"{detail or 'taskkill failed'}. Left registered so it can be "
+                    "retried."
                 )
-            else:
-                os.kill(info.pid, 15)  # SIGTERM
-        except (OSError, subprocess.TimeoutExpired) as exc:
-            return f"Error: failed to stop daemon '{name}': {exc}"
+        else:
+            # shell=True means info.pid is the shell; the real daemon is its
+            # child. Signal the whole group — which is why the spawn asks for a
+            # new session. Falls back to the pid if the group is already gone.
+            try:
+                os.killpg(os.getpgid(info.pid), 15)  # SIGTERM
+            except (ProcessLookupError, PermissionError, OSError):
+                os.kill(info.pid, 15)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        return f"Error: failed to stop daemon '{name}': {exc}"
+
+    # Confirm rather than assume: unregistering a process that is still running
+    # makes it permanently untrackable.
+    for _ in range(20):
+        if not is_alive(info.pid):
+            break
+        time.sleep(0.05)
+    else:
+        return (
+            f"Signalled daemon '{name}' (pid {info.pid}) but it is still running. "
+            "Left registered so it can be stopped again."
+        )
+
     unregister(name)
     return f"Stopped daemon '{name}'."
