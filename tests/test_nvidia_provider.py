@@ -113,3 +113,64 @@ def test_onboarding_offers_nvidia_and_stores_the_key_under_the_right_name():
     from novacode_cli.config.model_manager import MODEL_PRESETS
 
     assert f"{'nvidia'.upper()}_API_KEY" == MODEL_PRESETS["nvidia"]["api_key_var"]
+
+
+# ── chat_template_kwargs (the thinking toggle) ──────────────────────────────
+#
+# ChatNVIDIA does not declare chat_template_kwargs as a field, so passing it
+# top-level made the client relocate it into model_kwargs and warn on EVERY
+# model build: "chat_template_kwargs is not default parameter ... please confirm
+# that chat_template_kwargs is what you intended". Passing it inside
+# model_kwargs is the declared way to say the same thing; these pin that the
+# request payload is unchanged, because the payload is what the toggle rides on.
+
+
+def _payload(model):
+    return model._get_payload(inputs=[{"role": "user", "content": "hi"}], stop=None)
+
+
+@pytest.mark.parametrize(
+    ("effort", "thinking"), [("high", True), ("medium", True), ("off", False)]
+)
+def test_effort_drives_the_thinking_flag_in_the_request(isolated, effort, thinking):
+    from novacode_cli.config.model_create import build_chat_model
+    from novacode_cli.config.nova_config import NovaConfig
+
+    NovaConfig().set("reasoning_effort", effort)
+    model = build_chat_model("nvidia", "deepseek-ai/deepseek-v4-pro-0813")
+    assert _payload(model)["chat_template_kwargs"] == {"thinking": thinking}
+
+
+def test_no_effort_sends_no_thinking_flag(isolated):
+    """Unset means "don't express an opinion", not "thinking off"."""
+    from novacode_cli.config.model_create import build_chat_model
+    from novacode_cli.config.nova_config import NovaConfig
+
+    NovaConfig().set("reasoning_effort", None)
+    model = build_chat_model("nvidia", "deepseek-ai/deepseek-v4-pro-0813")
+    assert "chat_template_kwargs" not in _payload(model)
+
+
+def test_building_the_model_does_not_warn_about_chat_template_kwargs(isolated):
+    """The warning fired on every /model switch and every session start."""
+    import warnings
+
+    from novacode_cli.config.model_create import build_chat_model
+    from novacode_cli.config.nova_config import NovaConfig
+
+    NovaConfig().set("reasoning_effort", "high")
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        build_chat_model("nvidia", "deepseek-ai/deepseek-v4-pro-0813")
+    noisy = [w for w in caught if "chat_template_kwargs" in str(w.message)]
+    assert not noisy, f"still warning: {[str(w.message)[:80] for w in noisy]}"
+
+
+def test_the_token_limit_still_reaches_the_request(isolated):
+    """max_completion_tokens is silently DROPPED by this client, so max_tokens
+    stays despite its deprecation warning — swapping it would lose the limit."""
+    from novacode_cli.config.model_create import build_chat_model
+
+    assert _payload(build_chat_model("nvidia", "deepseek-ai/deepseek-v4-pro-0813"))[
+        "max_tokens"
+    ] == 16384

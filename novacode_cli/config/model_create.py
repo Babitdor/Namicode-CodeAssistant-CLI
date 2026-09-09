@@ -200,10 +200,17 @@ def build_chat_model(provider: str, model_name: str) -> BaseChatModel:
         # Reasoning models on NIM gate their chain-of-thought behind a
         # per-request template flag. Nova surfaces reasoning as its own event
         # stream, so follow the session's /effort setting: off -> no thinking.
-        if effort == "off":
-            nvidia_kwargs["chat_template_kwargs"] = {"thinking": False}
-        elif effort:
-            nvidia_kwargs["chat_template_kwargs"] = {"thinking": True}
+        #
+        # Passed inside model_kwargs, not as a top-level argument. ChatNVIDIA
+        # does not declare chat_template_kwargs as a field, so a top-level one
+        # is relocated here anyway — with a warning on every model build telling
+        # the user to "confirm that chat_template_kwargs is what you intended".
+        # Both routes produce a byte-identical request payload; this one is
+        # simply the declared way to say it.
+        if effort:
+            nvidia_kwargs["model_kwargs"] = {
+                "chat_template_kwargs": {"thinking": effort != "off"}
+            }
 
         return ChatNVIDIA(
             model=model_name,
