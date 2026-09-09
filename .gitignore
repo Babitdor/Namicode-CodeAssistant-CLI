@@ -141,3 +141,6 @@ novacode_cli/cli_session/
 # Local working checkout of an external agent repo (has its own .git) — never
 # vendor it into this repository.
 prime-agent/
+
+# Ad-hoc debugging probe scripts — scratch, never part of the tree
+_probe_*.py
